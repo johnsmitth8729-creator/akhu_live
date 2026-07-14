@@ -32,8 +32,12 @@ SESSION_COOKIE_SAMESITE = 'Lax'
 CSRF_COOKIE_SAMESITE = 'Lax'
 
 if not DEBUG:
-    ALLOWED_HOSTS = env.list('ALLOWED_HOSTS', default=['live.akhu.uz'])
-    CSRF_TRUSTED_ORIGINS = env.list('CSRF_TRUSTED_ORIGINS', default=['https://live.akhu.uz'])
+    ALLOWED_HOSTS = env.list('ALLOWED_HOSTS', default=['live.akhu.uz', '127.0.0.1', 'localhost'])
+    CSRF_TRUSTED_ORIGINS = env.list('CSRF_TRUSTED_ORIGINS', default=[
+        'https://live.akhu.uz',
+        'https://*.akhu.uz',
+        'http://live.akhu.uz'
+    ])
     
     # Production security headers
     SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
