@@ -1,0 +1,49 @@
+/* Enterprise VMS Tables */
+.table-responsive {
+    border-radius: 12px;
+    border: 1px solid var(--border-color);
+    overflow: hidden;
+    background-color: var(--card-bg);
+}
+
+.table-vms {
+    width: 100%;
+    margin-bottom: 0;
+    color: var(--text-color);
+    vertical-align: middle;
+    border-collapse: separate;
+    border-spacing: 0;
+}
+
+.table-vms th {
+    background-color: var(--secondary-color);
+    color: #FFFFFF;
+    font-weight: 600;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    padding: 0.85rem 1rem;
+    border: none;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+}
+
+.table-vms td {
+    padding: 0.85rem 1rem;
+    border-bottom: 1px solid var(--border-color);
+    font-size: 0.85rem;
+    background-color: var(--card-bg);
+}
+
+.table-vms tbody tr:last-child td {
+    border-bottom: none;
+}
+
+.table-vms tbody tr:hover td {
+    background-color: rgba(37, 99, 235, 0.03);
+}
+
+[data-theme="dark"] .table-vms tbody tr:hover td {
+    background-color: rgba(37, 99, 235, 0.05);
+}

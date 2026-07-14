@@ -1,0 +1,312 @@
+{% load i18n %}
+{% load static %}
+<!DOCTYPE html>
+<html lang="{{ CURRENT_LANGUAGE }}" data-theme="{{ THEME }}">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}{{ SYSTEM_NAME }}{% endblock %}</title>
+    <!-- Bootstrap 5.3 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- FontAwesome Icons -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css" rel="stylesheet">
+    <!-- Custom Theme Stylesheets -->
+    <link href="{% static 'css/theme.css' %}?v=1.0.1" rel="stylesheet">
+    <link href="{% static 'css/layout.css' %}?v=1.0.1" rel="stylesheet">
+    <link href="{% static 'css/components.css' %}?v=1.0.1" rel="stylesheet">
+    <link href="{% static 'css/tables.css' %}?v=1.0.1" rel="stylesheet">
+    <link href="{% static 'css/forms.css' %}?v=1.0.1" rel="stylesheet">
+    <link href="{% static 'css/dashboard.css' %}?v=1.0.1" rel="stylesheet">
+    <link href="{% static 'css/monitoring.css' %}?v=1.0.1" rel="stylesheet">
+    <link href="{% static 'css/animations.css' %}?v=1.0.1" rel="stylesheet">
+    <link href="{% static 'css/responsive.css' %}?v=1.0.1" rel="stylesheet">
+    {% block extra_head %}{% endblock %}
+</head>
+<body>
+    <div class="wrapper">
+        <!-- Mobile Sidebar Overlay Backdrop -->
+        <div id="sidebar-overlay"></div>
+
+        <!-- Sidebar -->
+        <aside id="sidebar">
+            <div id="sidebar-brand">
+                <a href="{% url 'dashboard:home' %}" class="text-decoration-none d-flex align-items-center gap-2.5">
+                    <img src="{% static 'img/logo-light.png' %}" alt="Logo" height="32" onerror="this.style.display='none'">
+                    <span class="fw-bold text-white fs-6 tracking-tight">{{ SYSTEM_NAME }}</span>
+                </a>
+            </div>
+            
+            <div id="sidebar-menu">
+                <div class="sidebar-heading">{% translate "Monitoring" %}</div>
+                <a class="nav-link-vms {% if request.resolver_match.url_name == 'home' and not request.GET.region %}active{% endif %}" href="{% url 'dashboard:home' %}">
+                    <i class="fa-solid fa-desktop"></i>
+                    <span>{% translate "Live Monitoring" %}</span>
+                </a>
+
+                <!-- Dynamic Regions Menu -->
+                {% if GLOBAL_REGIONS %}
+                    <div class="ps-3 my-1 border-start border-secondary border-opacity-25 ms-3 d-flex flex-column gap-1">
+                        {% for r in GLOBAL_REGIONS %}
+                            <a class="nav-link-sub-vms text-truncate {% if request.GET.region == r.id|stringformat:'s' %}active{% endif %}" 
+                               href="{% url 'dashboard:home' %}?region={{ r.id }}" 
+                               title="{{ r.name }}">
+                                <i class="fa-solid fa-location-dot"></i>
+                                <span>{{ r.name }}</span>
+                            </a>
+                        {% endfor %}
+                    </div>
+                {% endif %}
+                
+                {% if user.is_authenticated %}
+                    {% if user.is_super_admin %}
+                        <a class="nav-link-vms {% if request.resolver_match.url_name == 'admin_dashboard' %}active{% endif %}" href="{% url 'dashboard:admin_dashboard' %}">
+                            <i class="fa-solid fa-chart-line"></i>
+                            <span>{% translate "Analytics Dashboard" %}</span>
+                        </a>
+                        
+                        <div class="sidebar-heading mt-3">{% translate "Management" %}</div>
+                        <a class="nav-link-vms {% if request.resolver_match.app_name == 'regions' %}active{% endif %}" href="{% url 'regions:list' %}">
+                            <i class="fa-solid fa-earth-asia"></i>
+                            <span>{% translate "Regions" %}</span>
+                        </a>
+                    {% elif user.is_region_admin %}
+                        <a class="nav-link-vms {% if request.resolver_match.url_name == 'region_dashboard' %}active{% endif %}" href="{% url 'dashboard:region_dashboard' %}">
+                            <i class="fa-solid fa-chart-line"></i>
+                            <span>{% translate "Region Dashboard" %}</span>
+                        </a>
+                    {% endif %}
+                    
+                    <a class="nav-link-vms {% if request.resolver_match.app_name == 'cameras' %}active{% endif %}" href="{% url 'cameras:list' %}">
+                        <i class="fa-solid fa-video"></i>
+                        <span>{% translate "IP Cameras" %}</span>
+                    </a>
+                    
+                    <a class="nav-link-vms {% if request.resolver_match.app_name == 'sources' %}active{% endif %}" href="{% url 'sources:list' %}">
+                        <i class="fa-solid fa-tower-broadcast"></i>
+                        <span>{% translate "Live Sources" %}</span>
+                    </a>
+                    
+                    {% if user.is_super_admin %}
+                        <div class="sidebar-heading mt-3">{% translate "System" %}</div>
+                        <a class="nav-link-vms {% if request.resolver_match.app_name == 'logs' %}active{% endif %}" href="{% url 'logs:list' %}">
+                            <i class="fa-solid fa-clock-rotate-left"></i>
+                            <span>{% translate "Activity Logs" %}</span>
+                        </a>
+                        <a class="nav-link-vms {% if request.resolver_match.app_name == 'settings' %}active{% endif %}" href="{% url 'settings:list' %}">
+                            <i class="fa-solid fa-gears"></i>
+                            <span>{% translate "Settings" %}</span>
+                        </a>
+                    {% endif %}
+                {% endif %}
+            </div>
+            
+            <!-- Sidebar Footer Status -->
+            <div class="p-3 border-top border-secondary bg-dark bg-opacity-25 text-center">
+                <span class="badge bg-success-subtle text-success py-1 px-2.5 rounded-pill d-inline-flex align-items-center gap-1.5" style="font-size: 0.65rem;">
+                    <span class="indicator-pulse bg-success" style="width: 6px; height: 6px;"></span>
+                    <span>{% translate "SYSTEM ONLINE" %}</span>
+                </span>
+            </div>
+        </aside>
+
+        <!-- Right Content Area -->
+        <div id="content-wrapper">
+            <!-- Topbar Header -->
+            <header id="topbar">
+                <div class="d-flex align-items-center gap-2">
+                    <button class="btn btn-sm btn-outline-secondary border-0 d-lg-none me-1" id="sidebarToggleBtn" type="button" title="Toggle Navigation Menu">
+                        <i class="fa-solid fa-bars fs-5"></i>
+                    </button>
+                    <h5 class="m-0 fw-bold text-dark text-uppercase tracking-tight" id="topbar-title">
+                        {% block header_title %}{% translate "Security Center" %}{% endblock %}
+                    </h5>
+                </div>
+                
+                <div class="d-flex align-items-center gap-3">
+                    <!-- Current System Time clock -->
+                    <span class="text-muted small d-none d-md-inline-block font-monospace bg-light border px-2.5 py-1 rounded" id="live-clock">
+                        --:--:--
+                    </span>
+
+                    <!-- Language Switcher (globe icon + dropdown) -->
+                    <div class="position-relative" id="lang-switcher-wrap">
+                        <form action="{% url 'set_language' %}" method="post" class="m-0" id="lang-form">
+                            {% csrf_token %}
+                            <input name="next" type="hidden" value="{{ request.get_full_path }}">
+                            {% get_current_language as LANGUAGE_CODE %}
+                            {% get_available_languages as LANGUAGES %}
+                            <select name="language" id="lang-select" class="visually-hidden">
+                                {% for lang in LANGUAGES %}
+                                    <option value="{{ lang.0 }}" {% if lang.0 == LANGUAGE_CODE %}selected{% endif %}>{{ lang.1 }}</option>
+                                {% endfor %}
+                            </select>
+                        </form>
+
+                        <!-- Globe Button -->
+                        <button type="button" id="lang-toggle-btn"
+                                onclick="toggleLangDropdown(event)"
+                                class="btn btn-outline-secondary border rounded-circle p-0 d-flex align-items-center justify-content-center"
+                                style="width:36px;height:36px;"
+                                title="{% translate 'Switch Language' %}">
+                            <i class="fa-solid fa-globe" style="font-size:0.95rem;"></i>
+                        </button>
+
+                        <!-- Dropdown Menu -->
+                        <div id="lang-dropdown" class="position-absolute end-0 mt-1 py-1 rounded-3 border shadow-lg d-none"
+                             style="min-width:140px; z-index:9999; top:100%;
+                                    background:var(--card-bg, #fff);
+                                    border-color:var(--border-color, #dee2e6) !important;">
+                            {% for lang in LANGUAGES %}
+                            <button type="button"
+                                    onclick="selectLang('{{ lang.0 }}')"
+                                    class="d-flex align-items-center gap-2 w-100 px-3 py-2 border-0 text-start lang-option {% if lang.0 == LANGUAGE_CODE %}active{% endif %}"
+                                    style="background:transparent; font-size:0.82rem; cursor:pointer;
+                                           color:var(--text-color, #212529); transition:background 0.15s;">
+                                {% if lang.0 == LANGUAGE_CODE %}
+                                <i class="fa-solid fa-check text-primary" style="width:14px;font-size:0.7rem;"></i>
+                                {% else %}
+                                <span style="width:14px;display:inline-block;"></span>
+                                {% endif %}
+                                {{ lang.1 }}
+                            </button>
+                            {% endfor %}
+                        </div>
+                    </div>
+
+                    <script>
+                    function toggleLangDropdown(e) {
+                        e.stopPropagation();
+                        var dd = document.getElementById('lang-dropdown');
+                        dd.classList.toggle('d-none');
+                    }
+                    function selectLang(code) {
+                        var sel = document.getElementById('lang-select');
+                        for (var i = 0; i < sel.options.length; i++) {
+                            if (sel.options[i].value === code) { sel.selectedIndex = i; break; }
+                        }
+                        document.getElementById('lang-form').submit();
+                    }
+                    document.addEventListener('click', function(e) {
+                        var wrap = document.getElementById('lang-switcher-wrap');
+                        if (wrap && !wrap.contains(e.target)) {
+                            var dd = document.getElementById('lang-dropdown');
+                            if (dd) dd.classList.add('d-none');
+                        }
+                    });
+                    </script>
+
+
+                    <!-- Theme Toggle Button -->
+                    <button id="themeToggleBtn" class="btn btn-outline-secondary border rounded-circle p-2 d-flex align-items-center justify-content-center" style="width: 36px; height: 36px;" title="{% translate 'Toggle Theme' %}">
+                        <i class="fa-solid {% if THEME == 'dark' %}fa-sun text-warning{% else %}fa-moon text-dark{% endif %}" id="themeToggleIcon"></i>
+                    </button>
+
+                    <!-- User Account / Logout Options -->
+                    {% if user.is_authenticated %}
+                        <div class="d-flex align-items-center gap-2 bg-light-subtle border rounded-3 p-1 px-2.5">
+                            <i class="fa-solid fa-circle-user text-primary fs-5"></i>
+                            <div class="text-start d-none d-lg-block" style="line-height: 1.1;">
+                                <strong class="text-dark small d-block">{{ user.username }}</strong>
+                                <span class="badge {% if user.is_super_admin %}bg-danger-subtle text-danger{% else %}bg-success-subtle text-success{% endif %} text-uppercase p-0 border-0" style="font-size: 0.55rem;">
+                                    {% if user.is_super_admin %}{% translate "Super Admin" %}{% else %}{% translate "Region Admin" %}{% endif %}
+                                </span>
+                            </div>
+                            <!-- Logout Button directly on topbar to simplify UI (No profile menu) -->
+                            <form action="{% url 'accounts:logout' %}" method="post" class="m-0 ms-1 border-start ps-2">
+                                {% csrf_token %}
+                                <button type="submit" class="btn btn-link p-0 text-danger border-0 d-flex align-items-center justify-content-center" title="{% translate 'Logout' %}">
+                                    <i class="fa-solid fa-right-from-bracket fs-6"></i>
+                                </button>
+                            </form>
+                        </div>
+                    {% endif %}
+                </div>
+            </header>
+
+            <!-- Main Scrollable Content Viewport -->
+            <main id="main-content">
+                <!-- Alert Messages -->
+                {% if messages %}
+                    <div class="mb-4">
+                        {% for message in messages %}
+                            <div class="alert alert-{{ message.tags }} alert-dismissible fade show shadow-sm" role="alert">
+                                <i class="fa-solid {% if message.tags == 'success' %}fa-circle-check{% elif message.tags == 'error' %}fa-circle-xmark{% else %}fa-circle-info{% endif %} me-2"></i>
+                                {{ message }}
+                                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                            </div>
+                        {% endfor %}
+                    </div>
+                {% endif %}
+
+                <!-- Content Slot -->
+                {% block content %}{% endblock %}
+            </main>
+        </div>
+    </div>
+
+    <!-- Bootstrap 5.3 Bundle with Popper -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <!-- Clock & Theme Toggle Scripts -->
+    <script>
+        // Live system clock running in topbar
+        function updateClock() {
+            const clockEl = document.getElementById('live-clock');
+            if (clockEl) {
+                const now = new Date();
+                clockEl.innerText = now.toLocaleTimeString();
+            }
+        }
+        setInterval(updateClock, 1000);
+        updateClock();
+
+        // Theme Toggle script
+        document.getElementById('themeToggleBtn').addEventListener('click', function() {
+            const htmlElement = document.documentElement;
+            const currentTheme = htmlElement.getAttribute('data-theme');
+            const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+            
+            // Set cookie for Django context processor compatibility
+            document.cookie = "theme=" + newTheme + ";path=/;max-age=" + (60 * 60 * 24 * 365);
+            
+            // Update document element immediately
+            htmlElement.setAttribute('data-theme', newTheme);
+            
+            // Update Icon state
+            const icon = document.getElementById('themeToggleIcon');
+            if (newTheme === 'dark') {
+                icon.className = 'fa-solid fa-sun text-warning';
+            } else {
+                icon.className = 'fa-solid fa-moon text-dark';
+            }
+        });
+
+        // Mobile Sidebar Navigation Menu toggler
+        const sidebarToggle = document.getElementById('sidebarToggleBtn');
+        const sidebar = document.getElementById('sidebar');
+        const sidebarOverlay = document.getElementById('sidebar-overlay');
+        
+        if (sidebarToggle && sidebar && sidebarOverlay) {
+            sidebarToggle.addEventListener('click', function() {
+                sidebar.classList.toggle('show');
+                sidebarOverlay.classList.toggle('show');
+            });
+            
+            sidebarOverlay.addEventListener('click', function() {
+                sidebar.classList.remove('show');
+                sidebarOverlay.classList.remove('show');
+            });
+
+            // Close sidebar when clicking links inside it (for SPA/smooth feel)
+            const sidebarLinks = sidebar.querySelectorAll('.nav-link-vms');
+            sidebarLinks.forEach(link => {
+                link.addEventListener('click', function() {
+                    sidebar.classList.remove('show');
+                    sidebarOverlay.classList.remove('show');
+                });
+            });
+        }
+    </script>
+    {% block extra_js %}{% endblock %}
+</body>
+</html>

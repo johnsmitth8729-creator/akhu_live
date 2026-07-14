@@ -1,0 +1,31 @@
+/* Responsive Breakpoints for VMS SOC Wrapper */
+@media (max-width: 991.98px) {
+    #sidebar {
+        margin-left: -260px;
+        position: fixed;
+        height: 100vh;
+        z-index: 1200 !important;
+        box-shadow: 10px 0 30px rgba(0, 0, 0, 0.25) !important;
+    }
+    
+    #sidebar.show {
+        margin-left: 0 !important;
+    }
+
+    #sidebar-overlay {
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100vw;
+        height: 100vh;
+        background-color: rgba(15, 23, 42, 0.4);
+        backdrop-filter: blur(4px);
+        z-index: 1100 !important;
+    }
+
+    #sidebar-overlay.show {
+        display: block !important;
+    }
+}
+

@@ -1,0 +1,9 @@
+{
+    "server_url": "http://127.0.0.1:8000",
+    "agent_id": "YOUR_AGENT_UUID",
+    "agent_secret_key": "YOUR_AGENT_SECRET_KEY",
+    "heartbeat_interval": 10,
+    "fps": 15,
+    "bitrate": 1500,
+    "mediamtx_host": "127.0.0.1"
+}

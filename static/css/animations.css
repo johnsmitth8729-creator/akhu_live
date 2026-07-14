@@ -1,0 +1,31 @@
+/* VMS Status Animation Keyframes */
+
+@keyframes online-pulse {
+    0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7); }
+    70% { transform: scale(1); box-shadow: 0 0 0 6px rgba(16, 185, 129, 0); }
+    100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+}
+
+@keyframes recording-pulse {
+    0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); }
+    70% { transform: scale(1); box-shadow: 0 0 0 6px rgba(239, 68, 68, 0); }
+    100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+}
+
+.indicator-pulse.bg-success {
+    animation: online-pulse 2s infinite;
+}
+
+.indicator-pulse.bg-danger {
+    animation: recording-pulse 1.5s infinite;
+}
+
+/* Blink fast for REC tags */
+@keyframes blink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0; }
+}
+
+.blink-fast {
+    animation: blink 1s step-end infinite;
+}

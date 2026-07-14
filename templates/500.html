@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>500 - Server Error</title>
+    <!-- Bootstrap 5.3 -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- FontAwesome Icons -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css" rel="stylesheet">
+    <style>
+        body {
+            background-color: #0b1120;
+            color: #f8fafc;
+            font-family: system-ui, -apple-system, sans-serif;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            margin: 0;
+            overflow: hidden;
+        }
+        .error-card {
+            background: rgba(30, 41, 59, 0.6);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid #334155;
+            border-radius: 16px;
+            padding: 3.5rem 2.5rem;
+            max-width: 480px;
+            text-align: center;
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 10px 10px -5px rgba(0, 0, 0, 0.5);
+        }
+        .error-code {
+            font-size: 6.5rem;
+            font-weight: 900;
+            background: linear-gradient(135deg, #ef4444, #f87171);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 0.5rem;
+            line-height: 1;
+            letter-spacing: -0.05em;
+        }
+        .btn-home {
+            background-color: #dc2626 !important;
+            border-color: #dc2626 !important;
+            color: #ffffff !important;
+            border-radius: 8px;
+            padding: 0.65rem 1.75rem;
+            font-weight: 500;
+            transition: all 0.2s ease;
+        }
+        .btn-home:hover {
+            background-color: #b91c1c !important;
+            box-shadow: 0 4px 14px rgba(220, 38, 38, 0.4);
+            transform: translateY(-1px);
+        }
+    </style>
+</head>
+<body>
+    <div class="error-card">
+        <div class="error-code">500</div>
+        <h3 class="fw-bold mb-3 text-white">Internal Server Error</h3>
+        <p class="mb-4" style="color: #94a3b8; font-size: 0.95rem; line-height: 1.6;">
+            The server encountered an internal error or misconfiguration and was unable to complete your request.
+        </p>
+        <a href="/" class="btn btn-home d-inline-flex align-items-center gap-2">
+            <i class="fa-solid fa-rotate"></i>
+            <span>Reload Dashboard</span>
+        </a>
+    </div>
+</body>
+</html>

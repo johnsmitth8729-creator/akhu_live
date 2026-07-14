@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% load i18n %}
+
+{% block title %}{% translate "Delete Region" %} | {{ SYSTEM_NAME }}{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center align-items-center" style="min-height: 60vh;">
+    <div class="col-md-6 col-lg-5 text-center">
+        <div class="card p-4 border-0 shadow-lg glass">
+            <div class="text-danger mb-3">
+                <i class="fa-solid fa-triangle-exclamation display-4"></i>
+            </div>
+            <h3 class="fw-bold mb-2">{% translate "Delete Examination Region?" %}</h3>
+            <p class="text-muted small mb-4">
+                {% translate "You are about to permanently delete region" %} <strong>{{ object.name }}</strong>.
+                {% translate "This will also revoke access for its associated administrative user account" %} (<code>{{ object.user.username }}</code>)
+                {% translate "and delete all cameras linked to this region. This action cannot be undone." %}
+            </p>
+            <form method="post">
+                {% csrf_token %}
+                <div class="d-flex gap-2 justify-content-center">
+                    <a href="{% url 'regions:list' %}" class="btn btn-outline-secondary px-4">
+                        {% translate "Cancel" %}
+                    </a>
+                    <button type="submit" class="btn btn-danger px-4">
+                        <i class="fa-solid fa-trash-can me-1"></i> {% translate "Confirm Delete" %}
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

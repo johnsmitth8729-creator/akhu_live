@@ -1,0 +1,114 @@
+{% extends "base.html" %}
+{% load i18n %}
+
+{% block title %}{% translate "System Logs" %} | {{ SYSTEM_NAME }}{% endblock %}
+
+{% block header_title %}{% translate "Activity Logs" %}{% endblock %}
+
+{% block content %}
+<!-- Page Header Title -->
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h3 class="text-dark fw-bold mb-1">{% translate "Activity Logs Audit" %}</h3>
+        <p class="text-muted small m-0">{% translate "Audit trail of logins, logouts, camera updates, settings changes, and region operations." %}</p>
+    </div>
+</div>
+
+<!-- Search & Filters -->
+<div class="card mb-4 border-0 shadow-sm glass">
+    <div class="card-body p-3">
+        <form method="get" class="row g-2 align-items-center">
+            <!-- Search field -->
+            <div class="col-md-5">
+                <div class="input-group input-group-sm">
+                    <span class="input-group-text bg-transparent border-end-0 text-muted"><i class="fa-solid fa-magnifying-glass"></i></span>
+                    <input type="text" name="search" class="form-control border-start-0 shadow-none" placeholder="{% translate 'Search logs, usernames...' %}" value="{{ search_query }}">
+                </div>
+            </div>
+            
+            <!-- Action filter -->
+            <div class="col-md-3">
+                <select name="action" class="form-select form-select-sm shadow-none" onchange="this.form.submit()">
+                    <option value="">-- {% translate "Select Action" %} --</option>
+                    {% for act in actions %}
+                        {% if act %}
+                            <option value="{{ act }}" {% if action_filter == act %}selected{% endif %}>{{ act }}</option>
+                        {% endif %}
+                    {% endfor %}
+                </select>
+            </div>
+            
+            <!-- Controls -->
+            <div class="col-md-4 d-flex justify-content-md-end gap-2">
+                <button type="submit" class="btn btn-sm btn-primary px-3">
+                    <i class="fa-solid fa-filter me-1"></i> {% translate "Apply" %}
+                </button>
+                <a href="{% url 'logs:list' %}" class="btn btn-sm btn-outline-secondary px-3">
+                    {% translate "Clear" %}
+                </a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Table View -->
+<div class="table-responsive shadow-sm">
+    <table class="table-vms table-hover align-middle mb-0" style="font-size: 0.85rem;">
+        <thead>
+            <tr>
+                <th class="px-4" style="width: 180px;">{% translate "Timestamp" %}</th>
+                <th style="width: 180px;">{% translate "User Account" %}</th>
+                <th style="width: 180px;">{% translate "Action Executed" %}</th>
+                <th>{% translate "Audit Log Details" %}</th>
+                <th class="px-4" style="width: 150px;">{% translate "Origin IP" %}</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for log in logs %}
+                <tr>
+                    <td class="px-4 text-muted font-monospace" style="font-size: 0.75rem;">{{ log.timestamp|date:"Y-m-d H:i:s" }}</td>
+                    <td>
+                        {% if log.user %}
+                            <strong class="text-dark d-block mb-0.5">{{ log.user.username }}</strong>
+                            <span class="badge bg-secondary-subtle text-secondary py-0.5" style="font-size: 0.55rem; letter-spacing: 0.05em; text-transform: uppercase;">{{ log.user.get_role_display }}</span>
+                        {% else %}
+                            <span class="text-muted small italic"><i class="fa-solid fa-microchip me-1"></i>{% translate "System Daemon" %}</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <span class="badge {% if log.action == 'login' or 'started' in log.action or 'created' in log.action %}bg-success-subtle text-success border border-success-subtle{% elif 'failed' in log.action or 'delete' in log.action or 'remove' in log.action or 'stop' in log.action %}bg-danger-subtle text-danger border border-danger-subtle{% else %}bg-secondary-subtle text-secondary border border-secondary-subtle{% endif %} px-2.5 py-1 text-uppercase" style="font-size: 0.6rem; letter-spacing: 0.05em;">
+                            {{ log.action }}
+                        </span>
+                    </td>
+                    <td class="text-dark text-wrap">{{ log.description }}</td>
+                    <td class="px-4"><code class="small font-monospace">{{ log.ip_address|default:"127.0.0.1" }}</code></td>
+                </tr>
+            {% empty %}
+                <tr>
+                    <td colspan="5" class="text-center py-5 text-muted">
+                        <i class="fa-solid fa-receipt text-muted display-6 mb-3"></i>
+                        <p class="m-0">{% translate "No activity logs recorded." %}</p>
+                    </td>
+                </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<!-- Pagination -->
+{% if is_paginated %}
+    <div class="d-flex justify-content-between align-items-center mt-3">
+        <span class="small text-muted">{% translate "Page" %} {{ page_obj.number }} {% translate "of" %} {{ paginator.num_pages }}</span>
+        <nav>
+            <ul class="pagination pagination-sm m-0">
+                {% if page_obj.has_previous %}
+                    <li class="page-item"><a class="page-link" href="?page={{ page_obj.previous_page_number }}&search={{ search_query }}&action={{ action_filter }}">{% translate "Previous" %}</a></li>
+                {% endif %}
+                {% if page_obj.has_next %}
+                    <li class="page-item"><a class="page-link" href="?page={{ page_obj.next_page_number }}&search={{ search_query }}&action={{ action_filter }}">{% translate "Next" %}</a></li>
+                {% endif %}
+            </ul>
+        </nav>
+    </div>
+{% endif %}
+{% endblock %}

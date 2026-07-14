@@ -1,0 +1,49 @@
+/* VMS SOC Dashboard Widgets */
+.stat-widget {
+    border-radius: 12px;
+    border: 1px solid var(--border-color);
+    background-color: var(--card-bg);
+    padding: 1.25rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.stat-widget-icon {
+    width: 48px;
+    height: 48px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.25rem;
+}
+
+/* Timeline */
+.timeline-vms {
+    border-left: 2px solid var(--border-color);
+    padding-left: 1.5rem;
+    position: relative;
+}
+
+.timeline-vms-item {
+    position: relative;
+    margin-bottom: 1.5rem;
+}
+
+.timeline-vms-icon {
+    position: absolute;
+    left: -2.05rem;
+    top: 2px;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background-color: var(--card-bg);
+    border: 2px solid var(--primary-color);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.65rem;
+    color: var(--primary-color);
+    z-index: 2;
+}

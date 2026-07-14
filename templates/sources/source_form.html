@@ -1,0 +1,91 @@
+{% extends "base.html" %}
+{% load i18n %}
+
+{% block title %}{% translate "Edit Live Source" %} | {{ SYSTEM_NAME }}{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-10 col-lg-8">
+        <div class="card border-0 shadow-sm">
+            <div class="card-header bg-transparent border-bottom-0 pt-4 px-4 pb-2">
+                <h3 class="fw-bold text-primary m-0">{% translate "Edit Live Source" %}</h3>
+                <p class="text-muted small mb-0">{% translate "Modify name, parameters, or location configuration details." %}</p>
+            </div>
+            
+            <div class="card-body px-4 pb-4">
+                <form method="post" novalidate>
+                    {% csrf_token %}
+                    
+                    {{ form.region }}
+
+                    <div class="mb-3">
+                        <label for="{{ form.name.id_for_label }}" class="form-label small fw-medium">{{ form.name.label }}</label>
+                        {{ form.name }}
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="{{ form.source_type.id_for_label }}" class="form-label small fw-medium">{{ form.source_type.label }}</label>
+                        {{ form.source_type }}
+                    </div>
+
+                    <div class="mb-4 form-check form-switch">
+                        {{ form.recording_enabled }}
+                        <label class="form-check-label small fw-medium ms-1" for="{{ form.recording_enabled.id_for_label }}">
+                            {% translate "Enable Stream Recording (mp4)" %}
+                        </label>
+                    </div>
+
+                    {% if object.source_type == 'IP_CAMERA' %}
+                        <!-- RTSP Parameters -->
+                        <h6 class="text-secondary fw-bold mb-3 border-bottom pb-2">
+                            <i class="fa-solid fa-network-wired me-2 text-primary"></i>{% translate "IP Camera Parameters" %}
+                        </h6>
+                        <div class="mb-3">
+                            <label for="{{ form.rtsp_url.id_for_label }}" class="form-label small fw-medium">{{ form.rtsp_url.label }}</label>
+                            {{ form.rtsp_url }}
+                        </div>
+                        <div class="row g-3 mb-3">
+                            <div class="col-md-6">
+                                <label for="{{ form.rtsp_username.id_for_label }}" class="form-label small fw-medium">{{ form.rtsp_username.label }}</label>
+                                {{ form.rtsp_username }}
+                            </div>
+                            <div class="col-md-6">
+                                <label for="{{ form.rtsp_password.id_for_label }}" class="form-label small fw-medium">{{ form.rtsp_password.label }}</label>
+                                {{ form.rtsp_password }}
+                            </div>
+                        </div>
+                    {% endif %}
+
+                    <!-- Location Coordinates -->
+                    <h6 class="text-secondary fw-bold mb-3 border-bottom pb-2">
+                        <i class="fa-solid fa-map-pin me-2 text-primary"></i>{% translate "Location Coordinates" %}
+                    </h6>
+                    <div class="row g-3 mb-4">
+                        <div class="col-md-4">
+                            <label for="{{ form.building.id_for_label }}" class="form-label small fw-medium">{{ form.building.label }}</label>
+                            {{ form.building }}
+                        </div>
+                        <div class="col-md-4">
+                            <label for="{{ form.floor.id_for_label }}" class="form-label small fw-medium">{{ form.floor.label }}</label>
+                            {{ form.floor }}
+                        </div>
+                        <div class="col-md-4">
+                            <label for="{{ form.room.id_for_label }}" class="form-label small fw-medium">{{ form.room.label }}</label>
+                            {{ form.room }}
+                        </div>
+                    </div>
+
+                    <div class="d-flex gap-2 justify-content-end pt-2">
+                        <a href="{% url 'sources:list' %}" class="btn btn-sm btn-outline-secondary">
+                            {% translate "Cancel" %}
+                        </a>
+                        <button type="submit" class="btn btn-sm btn-primary">
+                            <i class="fa-solid fa-floppy-disk me-1"></i> {% translate "Save Changes" %}
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

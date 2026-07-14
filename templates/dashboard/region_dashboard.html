@@ -1,0 +1,337 @@
+{% extends "base.html" %}
+{% load i18n %}
+{% load static %}
+
+{% block title %}{{ region.name }} {% translate "Dashboard" %} | {{ SYSTEM_NAME }}{% endblock %}
+
+{% block extra_head %}
+<!-- Include HLS.js for browser HLS fallback support -->
+<script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+{% endblock %}
+
+{% block content %}
+<div class="row align-items-center mb-4 g-3">
+    <div class="col-md-8 d-flex align-items-center gap-3">
+        {% if region.logo %}
+            <img src="{{ region.logo.url }}" alt="{{ region.name }} Logo" style="max-height: 50px; max-width: 100px; object-fit: contain;">
+        {% endif %}
+        <div>
+            <h2 class="text-primary fw-bold mb-1">{{ region.name }} - {% translate "Control Room" %}</h2>
+            <p class="text-muted m-0">{% translate "Manage and monitor live examination cameras for this region only." %}</p>
+        </div>
+    </div>
+    <div class="col-md-4 d-flex justify-content-md-end gap-2">
+        <a href="{% url 'cameras:create' %}" class="btn btn-primary d-flex align-items-center gap-2">
+            <i class="fa-solid fa-plus"></i>
+            <span>{% translate "Add Camera" %}</span>
+        </a>
+    </div>
+</div>
+
+<!-- Stats Row -->
+<div class="row row-cols-1 row-cols-md-3 g-4 mb-4">
+    <!-- Total Cameras -->
+    <div class="col">
+        <div class="card p-3 stat-card shadow-none border-1">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <h6 class="text-muted text-uppercase mb-2 small fw-bold">{% translate "Configured Cameras" %}</h6>
+                    <h3 class="fw-bold m-0 text-dark">{{ stats.total_cameras }}</h3>
+                </div>
+                <div class="bg-primary bg-opacity-10 text-primary rounded-3 p-3 fs-3">
+                    <i class="fa-solid fa-video"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Online Cameras -->
+    <div class="col">
+        <div class="card p-3 stat-card success shadow-none border-1">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <h6 class="text-muted text-uppercase mb-2 small fw-bold">{% translate "Online Cameras" %}</h6>
+                    <h3 class="fw-bold m-0 text-success">{{ stats.online_cameras }}</h3>
+                </div>
+                <div class="bg-success bg-opacity-10 text-success rounded-3 p-3 fs-3">
+                    <i class="fa-solid fa-circle-check"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Offline Cameras -->
+    <div class="col">
+        <div class="card p-3 stat-card danger shadow-none border-1">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <h6 class="text-muted text-uppercase mb-2 small fw-bold">{% translate "Offline Cameras" %}</h6>
+                    <h3 class="fw-bold m-0 text-danger">{{ stats.offline_cameras }}</h3>
+                </div>
+                <div class="bg-danger bg-opacity-10 text-danger rounded-3 p-3 fs-3">
+                    <i class="fa-solid fa-circle-xmark"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Cameras Local Grid Stream View -->
+<h5 class="fw-bold mb-3 text-secondary border-bottom pb-2"><i class="fa-solid fa-display me-2 text-primary"></i>{% translate "Live Camera View" %}</h5>
+
+<div class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-4 mb-4">
+    {% for c in cameras %}
+        <div class="col" id="col-camera-{{ c.id }}">
+            <div class="card camera-card shadow-sm h-100 border-0" id="card-camera-{{ c.id }}">
+                <div class="video-container">
+                    <video id="video-{{ c.id }}" autoplay muted playsinline class="w-100 h-100 bg-black"></video>
+                    
+                    <div class="position-absolute top-0 start-0 w-100 h-100 d-flex flex-column align-items-center justify-content-center bg-dark bg-opacity-75 text-white" id="offline-overlay-{{ c.id }}" style="display: none;">
+                        <i class="fa-solid fa-video-slash fs-2 mb-2 text-danger"></i>
+                        <span class="small" id="offline-reason-{{ c.id }}">{% translate "Camera Offline" %}</span>
+                    </div>
+
+                    <div class="position-absolute top-0 start-0 w-100 h-100 d-flex flex-column align-items-center justify-content-center bg-dark bg-opacity-75 text-white" id="loading-overlay-{{ c.id }}">
+                        <div class="spinner-border text-primary spinner-border-sm mb-2" role="status">
+                            <span class="visually-hidden">Loading...</span>
+                        </div>
+                        <span class="small">{% translate "Connecting..." %}</span>
+                    </div>
+                    
+                    <div class="video-overlay">
+                        <span class="video-badge fw-medium d-flex align-items-center gap-1.5">
+                            <span class="indicator-pulse {% if request.user.is_staff %}indicator-{{ c.status }}{% else %}{% if c.status == 'recording' or c.status == 'online' %}bg-success{% else %}bg-secondary{% endif %}{% endif %}" id="indicator-{{ c.id }}"></span>
+                            <span id="badge-status-text-{{ c.id }}">{% if not request.user.is_staff and c.status == 'recording' %}LIVE{% else %}{{ c.get_status_display }}{% endif %}</span>
+                        </span>
+                    </div>
+                    
+                    <div class="camera-controls">
+                        <button onclick="captureCameraSnapshot({{ c.id }}, '{{ c.name }}')" title="{% translate 'Take Screenshot' %}">
+                            <i class="fa-solid fa-camera"></i>
+                        </button>
+                        <button onclick="toggleCardFullscreen({{ c.id }})" title="{% translate 'Fullscreen' %}">
+                            <i class="fa-solid fa-expand" id="fs-icon-{{ c.id }}"></i>
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="card-body p-3">
+                    <div class="d-flex justify-content-between align-items-start mb-2">
+                        <h6 class="card-title fw-bold m-0 text-truncate" style="max-width: 60%;" title="{{ c.name }}">{{ c.name }}</h6>
+                        <span class="badge bg-secondary-subtle text-secondary py-1" style="font-size: 0.7rem;">
+                            {{ c.building }} | {{ c.room }}
+                        </span>
+                    </div>
+                    
+                    <!-- Direct Action Controls inside cards -->
+                    <div class="d-flex gap-2 mt-3 pt-2 border-top">
+                        <a href="{% url 'cameras:edit' c.id %}" class="btn btn-sm btn-outline-secondary w-50 py-1" style="font-size: 0.8rem;">
+                            <i class="fa-solid fa-pen-to-square me-1"></i>{% translate "Edit" %}
+                        </a>
+                        <form action="{% if c.status == 'online' %}{% url 'cameras:stop_stream' c.id %}{% else %}{% url 'cameras:start_stream' c.id %}{% endif %}" method="post" class="w-50 m-0">
+                            {% csrf_token %}
+                            <button type="submit" class="btn btn-sm {% if c.status == 'online' %}btn-outline-danger{% else %}btn-outline-success{% endif %} w-100 py-1" style="font-size: 0.8rem;">
+                                {% if c.status == 'online' %}
+                                    <i class="fa-solid fa-pause me-1"></i>{% translate "Pause" %}
+                                {% else %}
+                                    <i class="fa-solid fa-play me-1"></i>{% translate "Start" %}
+                                {% endif %}
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    {% empty %}
+        <div class="col-12 py-5 text-center">
+            <i class="fa-solid fa-video-slash text-muted display-4 mb-3"></i>
+            <h5 class="text-muted">{% translate "No cameras added yet for this region." %}</h5>
+        </div>
+    {% endfor %}
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    class StreamPlayer {
+        constructor(cameraId, whepUrl, hlsUrl) {
+            this.cameraId = cameraId;
+            this.whepUrl = whepUrl;
+            this.hlsUrl = hlsUrl;
+            this.videoEl = document.getElementById(`video-${cameraId}`);
+            this.loadingOverlay = document.getElementById(`loading-overlay-${cameraId}`);
+            this.offlineOverlay = document.getElementById(`offline-overlay-${cameraId}`);
+            this.offlineReason = document.getElementById(`offline-reason-${cameraId}`);
+            this.peerConnection = null;
+            this.hlsPlayer = null;
+            this.reconnectAttempts = 0;
+            this.maxReconnectAttempts = 5;
+            this.isConnected = false;
+        }
+
+        async start() {
+            this.showLoading(true);
+            this.showOffline(false);
+            try {
+                await this.connectWebRTC();
+            } catch (webrtcError) {
+                console.warn(`WebRTC failed for camera ${this.cameraId}, playing HLS fallback...`, webrtcError);
+                this.connectHLS();
+            }
+        }
+
+        async connectWebRTC() {
+            this.peerConnection = new RTCPeerConnection({
+                iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
+            });
+
+            this.peerConnection.ontrack = (event) => {
+                this.videoEl.srcObject = event.streams[0];
+                this.showLoading(false);
+                this.isConnected = true;
+                this.reconnectAttempts = 0;
+            };
+
+            this.peerConnection.onconnectionstatechange = () => {
+                const state = this.peerConnection.connectionState;
+                if (state === 'failed' || state === 'disconnected') {
+                    this.handleReconnect();
+                }
+            };
+
+            this.peerConnection.addTransceiver('video', { direction: 'recvonly' });
+
+            const offer = await this.peerConnection.createOffer();
+            await this.peerConnection.setLocalDescription(offer);
+
+            const response = await fetch(this.whepUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/sdp' },
+                body: offer.sdp
+            });
+
+            if (response.status === 200) {
+                const answerSdp = await response.text();
+                await this.peerConnection.setRemoteDescription(new RTCSessionDescription({
+                    type: 'answer',
+                    sdp: answerSdp
+                }));
+            } else {
+                throw new Error("WHEP error");
+            }
+        }
+
+        connectHLS() {
+            if (Hls.isSupported()) {
+                if (this.hlsPlayer) this.hlsPlayer.destroy();
+                this.hlsPlayer = new Hls({ maxMaxBufferLength: 5 });
+                this.hlsPlayer.loadSource(this.hlsUrl);
+                this.hlsPlayer.attachMedia(this.videoEl);
+                this.hlsPlayer.on(Hls.Events.MANIFEST_PARSED, () => {
+                    this.videoEl.play();
+                    this.showLoading(false);
+                    this.isConnected = true;
+                });
+                this.hlsPlayer.on(Hls.Events.ERROR, (event, data) => {
+                    if (data.fatal) this.handleReconnect();
+                });
+            } else if (this.videoEl.canPlayType('application/vnd.apple.mpegurl')) {
+                this.videoEl.src = this.hlsUrl;
+                this.videoEl.addEventListener('loadedmetadata', () => {
+                    this.videoEl.play();
+                    this.showLoading(false);
+                    this.isConnected = true;
+                });
+            } else {
+                this.showOffline(true, "Browser HLS not supported");
+            }
+        }
+
+        handleReconnect() {
+            this.isConnected = false;
+            this.showLoading(false);
+            if (this.reconnectAttempts < this.maxReconnectAttempts) {
+                this.reconnectAttempts++;
+                this.showLoading(true);
+                setTimeout(() => this.start(), 4000);
+            } else {
+                this.showOffline(true, "{% translate 'Stream disconnected.' %}");
+            }
+        }
+
+        showLoading(show) { this.loadingOverlay.style.display = show ? 'flex' : 'none'; }
+        showOffline(show, reason = '') {
+            this.offlineOverlay.style.display = show ? 'flex' : 'none';
+            if (reason) this.offlineReason.innerText = reason;
+        }
+
+        destroy() {
+            if (this.peerConnection) this.peerConnection.close();
+            if (this.hlsPlayer) this.hlsPlayer.destroy();
+            this.videoEl.srcObject = null;
+            this.videoEl.src = '';
+        }
+    }
+
+    const activePlayers = {};
+
+    document.addEventListener("DOMContentLoaded", () => {
+        {% for c in cameras %}
+            {% if c.status == 'online' %}
+                activePlayers[{{ c.id }}] = new StreamPlayer(
+                    {{ c.id }}, 
+                    "{{ c.stream_urls.whep }}", 
+                    "{{ c.stream_urls.hls }}"
+                );
+                activePlayers[{{ c.id }}].start();
+            {% else %}
+                document.getElementById(`loading-overlay-{{ c.id }}`).style.display = 'none';
+                document.getElementById(`offline-overlay-{{ c.id }}`).style.display = 'flex';
+                document.getElementById(`offline-reason-{{ c.id }}`).innerText = "{% translate 'Camera is paused or offline' %}";
+            {% endif %}
+        {% endfor %}
+    });
+
+    function captureCameraSnapshot(cameraId, cameraName) {
+        const video = document.getElementById(`video-${cameraId}`);
+        if (!video || !video.videoWidth) {
+            alert("{% translate 'Video stream not loaded yet.' %}");
+            return;
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        
+        ctx.fillStyle = "rgba(0, 0, 0, 0.5)";
+        ctx.fillRect(0, canvas.height - 40, canvas.width, 40);
+        ctx.fillStyle = "#ffffff";
+        ctx.font = "bold 14px Arial";
+        ctx.fillText(`${cameraName} | ${new Date().toLocaleString()}`, 20, canvas.height - 15);
+
+        const link = document.createElement('a');
+        link.download = `${cameraName.replace(/\s+/g, '_')}_Snapshot.png`;
+        link.href = canvas.toDataURL("image/png");
+        link.click();
+    }
+
+    function toggleCardFullscreen(cameraId) {
+        const col = document.getElementById(`col-camera-${cameraId}`);
+        const card = document.getElementById(`card-camera-${cameraId}`);
+        const icon = document.getElementById(`fs-icon-${cameraId}`);
+        
+        if (card.classList.contains('fullscreen-active')) {
+            card.classList.remove('fullscreen-active');
+            icon.classList.remove('fa-compress');
+            icon.classList.add('fa-expand');
+            col.style.height = "auto";
+        } else {
+            card.classList.add('fullscreen-active');
+            icon.classList.remove('fa-expand');
+            icon.classList.add('fa-compress');
+            col.style.height = "100vh";
+        }
+    }
+</script>
+{% endblock %}

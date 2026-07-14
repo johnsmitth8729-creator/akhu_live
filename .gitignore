@@ -1,0 +1,24 @@
+# Virtual Environment
+venv/
+.venv/
+env/
+
+# Environment Variables (Maxfiy!)
+.env
+.env.local
+
+# Django Cache & Compiled files
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+db.sqlite3
+media/
+staticfiles/
+
+# Logs & Binaries
+*.log
+mediamtx.exe
+mediamtx
+mediamtx.zip
+screen_agent.log

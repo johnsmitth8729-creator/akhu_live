@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+{% load i18n %}
+
+{% block title %}{% translate "System Settings" %} | {{ SYSTEM_NAME }}{% endblock %}
+
+{% block header_title %}{% translate "System Settings" %}{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-lg-10">
+        <!-- Page Header -->
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <div>
+                <h3 class="text-dark fw-bold mb-1">{% translate "System Parameters" %}</h3>
+                <p class="text-muted small m-0">{% translate "Configure global settings, API connection strings, MediaMTX URLs, and monitoring rules." %}</p>
+            </div>
+        </div>
+
+        <!-- Settings Form Card -->
+        <div class="card border-0 shadow-sm">
+            <div class="card-body p-4">
+                <form action="{% url 'settings:update' %}" method="post">
+                    {% csrf_token %}
+                    
+                    <h5 class="text-dark fw-bold mb-4 border-bottom pb-2">
+                        <i class="fa-solid fa-sliders me-2 text-primary"></i>{% translate "Configuration Settings" %}
+                    </h5>
+
+                    {% for setting in settings %}
+                        <div class="row mb-4 align-items-center">
+                            <!-- Label and Description -->
+                            <div class="col-md-5">
+                                <label class="form-label fw-bold mb-0 text-dark" style="font-size: 0.9rem;">
+                                    {{ setting.key }}
+                                </label>
+                                <span class="d-block text-muted small mt-1" style="font-size: 0.75rem; line-height: 1.35;">{{ setting.description }}</span>
+                            </div>
+                            
+                            <!-- Setting Value Input -->
+                            <div class="col-md-7">
+                                {% if setting.value_type == 'boolean' %}
+                                    <div class="form-check form-switch m-0 d-flex align-items-center">
+                                        <input class="form-check-input shadow-none me-2" style="cursor: pointer; width: 42px; height: 21px;" type="checkbox" name="{{ setting.key }}" id="id_{{ setting.key }}" {% if setting.get_typed_value %}checked{% endif %}>
+                                        <label class="form-check-label text-muted small" for="id_{{ setting.key }}" style="cursor: pointer;">
+                                            {% translate "Enabled" %}
+                                        </label>
+                                    </div>
+                                {% elif setting.value_type == 'integer' %}
+                                    <input type="number" name="{{ setting.key }}" value="{{ setting.value }}" class="form-control" required style="max-width: 250px;">
+                                {% else %}
+                                    <input type="text" name="{{ setting.key }}" value="{{ setting.value }}" class="form-control font-monospace" required style="font-size: 0.825rem;">
+                                {% endif %}
+                            </div>
+                        </div>
+                        {% if not forloop.last %}
+                            <hr class="border-secondary-subtle opacity-25">
+                        {% endif %}
+                    {% empty %}
+                        <div class="text-center py-5 text-muted">
+                            <i class="fa-solid fa-circle-exclamation text-muted display-6 mb-3"></i>
+                            <p class="m-0">{% translate "No system settings registered in the database." %}</p>
+                        </div>
+                    {% endfor %}
+
+                    <!-- Save Form Actions -->
+                    {% if settings %}
+                        <div class="d-flex justify-content-end gap-2 border-top pt-4 mt-4">
+                            <a href="{% url 'dashboard:home' %}" class="btn btn-outline-secondary px-4">
+                                {% translate "Cancel" %}
+                            </a>
+                            <button type="submit" class="btn btn-primary px-4 shadow-sm">
+                                <i class="fa-solid fa-floppy-disk me-1.5"></i> {% translate "Save All Settings" %}
+                            </button>
+                        </div>
+                    {% endif %}
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

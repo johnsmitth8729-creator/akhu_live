@@ -1,0 +1,117 @@
+{% extends "base.html" %}
+{% load i18n %}
+{% load static %}
+
+{% block title %}{% translate "Login" %} | {{ SYSTEM_NAME }}{% endblock %}
+
+{% block extra_head %}
+<style>
+    /* Fullscreen layout override for clean login portal */
+    #sidebar { display: none !important; }
+    #topbar { display: none !important; }
+    #content-wrapper { height: 100vh !important; }
+    #main-content { 
+        padding: 0 !important; 
+        height: 100vh !important; 
+        display: flex; 
+        align-items: center; 
+        justify-content: center; 
+        background: radial-gradient(circle at top right, rgba(37, 99, 235, 0.1), transparent), var(--bg-color);
+    }
+    .login-card {
+        background-color: var(--card-bg);
+        border: 1px solid var(--border-color);
+        border-radius: 16px;
+        box-shadow: var(--shadow-lg);
+        width: 100%;
+        max-width: 400px;
+        padding: 2.5rem;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="login-card">
+    <!-- Branding Header -->
+    <div class="text-center mb-4">
+        <div class="d-flex align-items-center justify-content-center gap-2 mb-3">
+            <i class="fa-solid fa-shield-halved text-primary fs-3"></i>
+            <h4 class="m-0 fw-bold tracking-tight text-dark">{{ SYSTEM_NAME }}</h4>
+        </div>
+        <h5 class="fw-bold text-dark mb-1">{% translate "Sign In" %}</h5>
+        <p class="text-muted small">{% translate "Enter credentials to access camera controls." %}</p>
+    </div>
+
+    <!-- Login Form -->
+    <form method="post" action="{% url 'accounts:login' %}">
+        {% csrf_token %}
+        
+        <!-- Errors -->
+        {% if form.non_field_errors %}
+            <div class="alert alert-danger p-2 small rounded-3" role="alert">
+                {% for error in form.non_field_errors %}
+                    <i class="fa-solid fa-triangle-exclamation me-1"></i> {{ error }}
+                {% endfor %}
+            </div>
+        {% endif %}
+
+        <!-- Username -->
+        <div class="mb-3">
+            <label for="id_username" class="form-label small fw-semibold text-dark">{% translate "Username" %}</label>
+            <div class="input-group">
+                <span class="input-group-text bg-light border-end-0 text-muted">
+                    <i class="fa-solid fa-user"></i>
+                </span>
+                <input type="text" name="username" id="id_username" class="form-control border-start-0 ps-0 shadow-none {% if form.username.errors %}is-invalid{% endif %}" placeholder="{% translate 'Enter your username' %}" required autofocus>
+                {% if form.username.errors %}
+                    <div class="invalid-feedback">
+                        {{ form.username.errors|first }}
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Password -->
+        <div class="mb-4">
+            <label for="id_password" class="form-label small fw-semibold text-dark">{% translate "Password" %}</label>
+            <div class="input-group">
+                <span class="input-group-text bg-light border-end-0 text-muted">
+                    <i class="fa-solid fa-lock"></i>
+                </span>
+                <input type="password" name="password" id="id_password" class="form-control border-start-0 ps-0 shadow-none {% if form.password.errors %}is-invalid{% endif %}" placeholder="{% translate 'Enter your password' %}" required>
+                <button class="btn btn-outline-secondary border border-start-0 text-muted bg-light px-3" type="button" id="togglePasswordBtn">
+                    <i class="fa-solid fa-eye-slash" id="togglePasswordIcon"></i>
+                </button>
+                {% if form.password.errors %}
+                    <div class="invalid-feedback">
+                        {{ form.password.errors|first }}
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Submit Button -->
+        <button type="submit" class="btn btn-primary w-100 py-2.5 rounded-3 d-flex align-items-center justify-content-center gap-2 shadow-sm">
+            <i class="fa-solid fa-right-to-bracket"></i>
+            <span>{% translate "Login" %}</span>
+        </button>
+    </form>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // Password toggle visibility script
+    document.getElementById('togglePasswordBtn').addEventListener('click', function() {
+        const passwordInput = document.getElementById('id_password');
+        const icon = document.getElementById('togglePasswordIcon');
+        if (passwordInput.type === 'password') {
+            passwordInput.type = 'text';
+            icon.className = 'fa-solid fa-eye';
+        } else {
+            passwordInput.type = 'password';
+            icon.className = 'fa-solid fa-eye-slash';
+        }
+    });
+</script>
+{% endblock %}

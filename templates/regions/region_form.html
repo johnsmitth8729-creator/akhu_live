@@ -1,0 +1,116 @@
+{% extends "base.html" %}
+{% load i18n %}
+
+{% block title %}
+    {% if object %}{% translate "Edit Region" %}{% else %}{% translate "Create Region" %}{% endif %} | {{ SYSTEM_NAME }}
+{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-8 col-lg-6">
+        <div class="card border-0 shadow-sm">
+            <div class="card-header bg-transparent border-bottom-0 pt-4 px-4 pb-2">
+                <h3 class="fw-bold text-primary m-0">
+                    {% if object %}{% translate "Edit Examination Region" %}{% else %}{% translate "Create Examination Region" %}{% endif %}
+                </h3>
+                <p class="text-muted small mb-0">{% translate "Fill in campus details. An administrative login account will be updated or created automatically." %}</p>
+            </div>
+            <div class="card-body px-4 pb-4">
+                <form method="post" enctype="multipart/form-data" novalidate>
+                    {% csrf_token %}
+
+                    <!-- Form Errors -->
+                    {% if form.non_field_errors %}
+                        <div class="alert alert-danger p-2 small" role="alert">
+                            {% for error in form.non_field_errors %}
+                                <i class="fa-solid fa-triangle-exclamation me-1"></i> {{ error }}
+                            {% endfor %}
+                        </div>
+                    {% endif %}
+
+                    <!-- Custom Form fields layout -->
+                    <h6 class="text-secondary fw-bold mb-3 border-bottom pb-2">
+                        <i class="fa-solid fa-school me-2 text-primary"></i>{% translate "Campus Information" %}
+                    </h6>
+                    
+                    <!-- Region Name -->
+                    <div class="mb-3">
+                        <label for="{{ form.name.id_for_label }}" class="form-label small fw-medium">{{ form.name.label }}</label>
+                        {{ form.name }}
+                        {% if form.name.errors %}
+                            <div class="text-danger small mt-1">{{ form.name.errors|first }}</div>
+                        {% endif %}
+                    </div>
+
+                    <!-- Description -->
+                    <div class="mb-3">
+                        <label for="{{ form.description.id_for_label }}" class="form-label small fw-medium">{{ form.description.label }}</label>
+                        {{ form.description }}
+                        {% if form.description.errors %}
+                            <div class="text-danger small mt-1">{{ form.description.errors|first }}</div>
+                        {% endif %}
+                    </div>
+
+                    <!-- Logo -->
+                    <div class="mb-4">
+                        <label for="{{ form.logo.id_for_label }}" class="form-label small fw-medium">{{ form.logo.label }}</label>
+                        {{ form.logo }}
+                        {% if form.logo.errors %}
+                            <div class="text-danger small mt-1">{{ form.logo.errors|first }}</div>
+                        {% endif %}
+                        {% if object.logo %}
+                            <div class="mt-2 small text-muted">
+                                {% translate "Current Logo:" %} <a href="{{ object.logo.url }}" target="_blank">{{ object.logo.name }}</a>
+                            </div>
+                        {% endif %}
+                    </div>
+
+                    <!-- User Account configuration (Only visible during CREATION) -->
+                    {% if not object %}
+                        <h6 class="text-secondary fw-bold mb-3 border-bottom pb-2">
+                            <i class="fa-solid fa-user-gear me-2 text-primary"></i>{% translate "Admin Account Credentials" %}
+                        </h6>
+                        <div class="row g-3 mb-4">
+                            <!-- Username -->
+                            <div class="col-sm-6">
+                                <label for="{{ form.username.id_for_label }}" class="form-label small fw-medium">{{ form.username.label }}</label>
+                                {{ form.username }}
+                                {% if form.username.errors %}
+                                    <div class="text-danger small mt-1">{{ form.username.errors|first }}</div>
+                                {% endif %}
+                            </div>
+                            <!-- Password -->
+                            <div class="col-sm-6">
+                                <label for="{{ form.password.id_for_label }}" class="form-label small fw-medium">{{ form.password.label }}</label>
+                                {{ form.password }}
+                                {% if form.password.errors %}
+                                    <div class="text-danger small mt-1">{{ form.password.errors|first }}</div>
+                                {% endif %}
+                            </div>
+                        </div>
+                    {% else %}
+                        <!-- Active Checkbox for EDIT -->
+                        <div class="form-check form-switch mb-4">
+                            {{ form.is_active }}
+                            <label class="form-check-label small fw-semibold text-muted" for="{{ form.is_active.id_for_label }}">
+                                {{ form.is_active.label }}
+                            </label>
+                        </div>
+                    {% endif %}
+
+                    <!-- Form actions -->
+                    <div class="d-flex gap-2 justify-content-end pt-2">
+                        <a href="{% url 'regions:list' %}" class="btn btn-sm btn-outline-secondary">
+                            {% translate "Cancel" %}
+                        </a>
+                        <button type="submit" class="btn btn-sm btn-primary">
+                            <i class="fa-solid fa-floppy-disk me-1"></i>
+                            {% if object %}{% translate "Save Changes" %}{% else %}{% translate "Create Region" %}{% endif %}
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,723 @@
+{% extends "base.html" %}
+{% load i18n %}
+
+{% block title %}{% translate "Live Sources" %} | {{ SYSTEM_NAME }}{% endblock %}
+
+{% block extra_head %}
+<!-- HLS.js for browser fallback streaming -->
+<script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+<style>
+    .source-card {
+        border-radius: 12px;
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+    .source-card:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 8px 16px rgba(0,0,0,0.2) !important;
+    }
+    .video-container {
+        border-top-left-radius: 12px;
+        border-top-right-radius: 12px;
+        overflow: hidden;
+    }
+    .indicator-pulse {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        display: inline-block;
+    }
+    .bg-black {
+        background-color: #000 !important;
+    }
+</style>
+{% endblock %}
+
+{% block header_title %}{% translate "Live Sources" %}{% endblock %}
+
+{% block content %}
+<!-- Header Bar -->
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h3 class="text-dark fw-bold mb-1">{% translate "Live Sources Control Panel" %}</h3>
+        <p class="text-muted small m-0">{% translate "Publish and stream multiple feeds concurrently from Webcams, Screens, Tabs, or IP Cameras." %}</p>
+    </div>
+    <a href="{% url 'sources:wizard' %}" class="btn btn-primary d-flex align-items-center gap-2 shadow-sm">
+        <i class="fa-solid fa-wand-magic-sparkles"></i>
+        <span>{% translate "Add Source Wizard" %}</span>
+    </a>
+</div>
+
+<!-- Sources Grid -->
+<div class="row row-cols-1 row-cols-md-2 row-cols-xl-3 g-4" id="sources-grid">
+    {% for s in sources %}
+        <div class="col" id="col-source-{{ s.id }}">
+            <div class="card shadow-sm h-100 border-0 bg-dark text-white source-card overflow-hidden">
+                <!-- Video Container -->
+                <div class="video-container position-relative bg-black" style="height: 220px;">
+                    <video id="preview-video-{{ s.id }}" autoplay muted playsinline class="w-100 h-100"></video>
+                    
+                    <!-- Status Overlays -->
+                    <div class="position-absolute top-2 start-2 bg-dark bg-opacity-75 px-2 py-1 rounded small text-white d-flex align-items-center gap-1.5">
+                        {% if request.user.is_staff %}
+                        <span class="indicator-pulse {% if s.status == 'recording' %}bg-danger{% elif s.status == 'online' %}bg-success{% else %}bg-secondary{% endif %}" id="indicator-{{ s.id }}"></span>
+                        <span class="badge {% if s.status == 'recording' %}bg-danger{% elif s.status == 'online' %}bg-success{% else %}bg-secondary{% endif %} px-2 py-0.5 text-uppercase" style="font-size: 0.6rem;" id="badge-status-{{ s.id }}">
+                            {{ s.status }}
+                        </span>
+                        {% else %}
+                        <span class="indicator-pulse {% if s.status == 'online' or s.status == 'recording' %}bg-success{% else %}bg-secondary{% endif %}" id="indicator-{{ s.id }}"></span>
+                        <span class="badge {% if s.status == 'online' or s.status == 'recording' %}bg-success{% else %}bg-secondary{% endif %} px-2 py-0.5 text-uppercase" style="font-size: 0.6rem;" id="badge-status-{{ s.id }}">
+                            {% if s.status == 'recording' %}LIVE{% else %}{{ s.status }}{% endif %}
+                        </span>
+                        {% endif %}
+                        {% if request.user.is_staff %}
+                        <span class="badge bg-danger text-uppercase px-2" id="rec-tag-{{ s.id }}" style="display: none;">REC</span>
+                        {% endif %}
+                    </div>
+                    
+                    <!-- Source Type Icon -->
+                    <div class="position-absolute top-2 end-2 bg-dark bg-opacity-75 px-2 py-1 rounded text-white small">
+                        {% if s.source_type == 'IP_CAMERA' %}<i class="fa-solid fa-video" title="{% translate 'IP Camera' %}"></i>
+                        {% elif s.source_type == 'SCREEN_SHARE' %}<i class="fa-solid fa-desktop" title="{% translate 'Screen' %}"></i>
+                        {% elif s.source_type == 'WEB_BROWSER' %}<i class="fa-solid fa-window-restore" title="{% translate 'Tab' %}"></i>
+                        {% elif s.source_type == 'WEBCAM' %}<i class="fa-solid fa-camera" title="{% translate 'Webcam' %}"></i>
+                        {% endif %}
+                    </div>
+                    
+                    {% if request.user.is_staff %}
+                    <!-- Metrics Timer Overlay -->
+                    <div class="position-absolute bottom-2 start-2 bg-dark bg-opacity-75 px-2 py-0.5 rounded small text-white" id="stats-overlay-{{ s.id }}" style="display: none; font-size: 0.65rem;">
+                        <span>Timer: <strong id="rec-timer-{{ s.id }}">00:00:00</strong></span>
+                    </div>
+                    {% endif %}
+                    
+                    <!-- Video Settings overlay (Fullscreen / Mute) -->
+                    <div class="position-absolute bottom-2 end-2 d-flex gap-1.5">
+                        <button class="btn btn-dark btn-sm bg-opacity-75 border-0 p-1 px-2" style="font-size: 0.75rem;" onclick="toggleAudioMute('{{ s.id }}')" id="btn-mute-{{ s.id }}">
+                            <i class="fa-solid fa-microphone-slash"></i>
+                        </button>
+                        <button class="btn btn-dark btn-sm bg-opacity-75 border-0 p-1 px-2" style="font-size: 0.75rem;" onclick="togglePreviewFullscreen('{{ s.id }}')">
+                            <i class="fa-solid fa-expand"></i>
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- Card Body -->
+                <div class="card-body p-3 d-flex flex-column justify-content-between">
+                    <div>
+                        <h5 class="fw-bold text-light m-0 text-truncate" title="{{ s.name }}">{{ s.name }}</h5>
+                        <p class="text-white-50 small mb-3">Bldg: {{ s.building }} | Rm {{ s.room }}</p>
+                    </div>
+                    
+                    <!-- Interactive Action Controls -->
+                    <div class="d-flex flex-column gap-2 mt-auto">
+                        <div class="d-flex gap-2">
+                            {% if s.source_type == 'IP_CAMERA' %}
+                                <!-- RTSP Direct Stream (no local preview needed) -->
+                                <button class="btn {% if s.status == 'online' or s.status == 'recording' %}btn-danger{% else %}btn-success{% endif %} btn-sm flex-grow-1" 
+                                        id="btn-stream-toggle-{{ s.id }}" 
+                                        onclick="toggleRTSPStreaming('{{ s.id }}', '{{ s.status }}')">
+                                    {% if s.status == 'online' or s.status == 'recording' %}
+                                        <i class="fa-solid fa-stop me-1"></i> {% translate 'Stop RTSP' %}
+                                    {% else %}
+                                        <i class="fa-solid fa-tower-broadcast me-1"></i> {% translate 'Start RTSP' %}
+                                    {% endif %}
+                                </button>
+                            {% else %}
+                                <!-- WebRTC Screen/Webcam Capture -->
+                                <button class="btn btn-outline-light btn-sm flex-grow-1" 
+                                        id="btn-device-capture-{{ s.id }}" 
+                                        onclick="toggleDeviceCapture('{{ s.id }}', '{{ s.source_type }}')">
+                                    <i class="fa-solid fa-play me-1"></i> {% translate "Preview" %}
+                                </button>
+                                <button class="btn btn-success btn-sm flex-grow-1" 
+                                        id="btn-stream-toggle-{{ s.id }}" 
+                                        onclick="toggleWebRTCStreaming('{{ s.id }}', '{{ mediamtx_webrtc_url }}/source_{{ s.id }}/')" 
+                                        disabled>
+                                    <i class="fa-solid fa-tower-broadcast me-1"></i> {% translate "Stream" %}
+                                </button>
+                            {% endif %}
+                        </div>
+                        
+                        <div class="d-flex justify-content-between align-items-center mt-2 border-top border-secondary pt-2">
+                        {% if request.user.is_staff %}
+                        <div class="form-check form-switch d-flex align-items-center">
+                            <input class="form-check-input" type="checkbox" id="local-rec-checkbox-{{ s.id }}" onchange="toggleRecordingPreference('{{ s.id }}')" {% if s.recording_enabled %}checked{% endif %}>
+                            <label class="form-check-label small ms-1 text-white-50" for="local-rec-checkbox-{{ s.id }}">{% translate "Record" %}</label>
+                        </div>
+                        {% endif %}
+                            
+                            <!-- Action Buttons -->
+                            <div class="btn-group">
+                                <a href="{% url 'sources:edit' s.id %}" class="btn btn-sm btn-outline-secondary text-white-50 border-secondary" title="{% translate 'Edit Details' %}">
+                                    <i class="fa-solid fa-pen-to-square"></i>
+                                </a>
+                                <a href="{% url 'sources:delete' s.id %}" class="btn btn-sm btn-outline-danger border-secondary" title="{% translate 'Delete Source' %}">
+                                    <i class="fa-solid fa-trash-can"></i>
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    {% empty %}
+        <div class="col-12 text-center py-5 text-muted glass rounded-3">
+            <i class="fa-solid fa-photo-film display-4 mb-3 text-secondary"></i>
+            <h5>{% translate "No inputs configured" %}</h5>
+            <p class="small text-muted mb-3">{% translate "Launch the Add Source Wizard to get started." %}</p>
+            <a href="{% url 'sources:wizard' %}" class="btn btn-primary btn-sm px-4">
+                <i class="fa-solid fa-wand-magic-sparkles me-1"></i> {% translate "Add Source" %}
+            </a>
+        </div>
+    {% endfor %}
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // Concurrent states objects mapped by source ID
+    const localStreams = {};
+    const peerConnections = {};
+    const mediaRecorders = {};
+    const recordedChunks = {};
+    const recordingTimers = {};
+    const recordingStartTimes = {};
+    const isStreamingActive = {};
+    const isDeviceActive = {};
+    const isRecordingActive = {};
+
+    function stopAllLocalMedia(sourceId) {
+        if (localStreams[sourceId]) {
+            localStreams[sourceId].getTracks().forEach(track => track.stop());
+            delete localStreams[sourceId];
+        }
+        if (peerConnections[sourceId]) {
+            peerConnections[sourceId].close();
+            delete peerConnections[sourceId];
+        }
+        if (mediaRecorders[sourceId] && mediaRecorders[sourceId].state !== 'inactive') {
+            try { mediaRecorders[sourceId].stop(); } catch(e) {}
+            delete mediaRecorders[sourceId];
+        }
+        if (recordingTimers[sourceId]) {
+            clearInterval(recordingTimers[sourceId]);
+            delete recordingTimers[sourceId];
+        }
+        
+        const video = document.getElementById(`preview-video-${sourceId}`);
+        if (video) {
+            video.srcObject = null;
+            video.src = '';
+        }
+        
+        const recTag = document.getElementById(`rec-tag-${sourceId}`);
+        if (recTag) recTag.style.display = 'none';
+        
+        const timerText = document.getElementById(`rec-timer-${sourceId}`);
+        if (timerText) timerText.innerText = "00:00:00";
+        
+        isDeviceActive[sourceId] = false;
+        isStreamingActive[sourceId] = false;
+        isRecordingActive[sourceId] = false;
+    }
+
+    async function toggleDeviceCapture(sourceId, sourceType) {
+        const video = document.getElementById(`preview-video-${sourceId}`);
+        const captureBtn = document.getElementById(`btn-device-capture-${sourceId}`);
+        const streamBtn = document.getElementById(`btn-stream-toggle-${sourceId}`);
+
+        if (!isDeviceActive[sourceId]) {
+            // Check for Browser Secure Context restriction on Media APIs
+            if (!navigator.mediaDevices) {
+                const origin = window.location.origin;
+                const isHttp = window.location.protocol === 'http:';
+                const isRemote = window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
+                
+                // Show styled modal instead of plain alert
+                let existing = document.getElementById('secure-ctx-modal');
+                if (existing) existing.remove();
+                
+                const modal = document.createElement('div');
+                modal.id = 'secure-ctx-modal';
+                modal.style.cssText = 'position:fixed;inset:0;z-index:99999;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.7);backdrop-filter:blur(4px);';
+                modal.innerHTML = `
+                  <div style="background:var(--card-bg,#1e293b);border:1px solid var(--border-color,#334155);border-radius:16px;padding:2rem;max-width:520px;width:90%;color:var(--text-color,#f1f5f9);box-shadow:0 25px 60px rgba(0,0,0,0.5);">
+                    <div style="display:flex;align-items:center;gap:12px;margin-bottom:1.25rem;">
+                      <div style="width:44px;height:44px;background:#ef4444;border-radius:12px;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+                        <i class="fa-solid fa-lock" style="color:#fff;font-size:1.2rem;"></i>
+                      </div>
+                      <div>
+                        <h5 style="margin:0;font-weight:700;color:#f87171;">Kamera/Ekran ruxsati bloklandi</h5>
+                        <p style="margin:0;font-size:0.8rem;color:#94a3b8;">HTTP ulanishda brauzer media API larni o'chirib qo'yadi</p>
+                      </div>
+                    </div>
+                    <p style="font-size:0.85rem;line-height:1.6;color:#cbd5e1;margin-bottom:1.25rem;">
+                      Boshqa qurilmadan <strong style="color:#60a5fa;">${origin}</strong> ga HTTP orqali kirilganda brauzer xavfsizlik sababi bilan kamera va ekran ulashishni bloklaydi.
+                    </p>
+                    <div style="background:rgba(99,102,241,0.1);border:1px solid rgba(99,102,241,0.3);border-radius:10px;padding:1rem;margin-bottom:1rem;">
+                      <p style="margin:0 0 0.5rem;font-size:0.8rem;font-weight:600;color:#818cf8;text-transform:uppercase;letter-spacing:0.5px;">
+                        <i class="fa-solid fa-chrome me-1"></i> Chrome / Edge orqali yechim (tezkor)
+                      </p>
+                      <ol style="margin:0;padding-left:1.25rem;font-size:0.82rem;color:#cbd5e1;line-height:1.8;">
+                        <li>Chrome manzil satriga oching: <br>
+                          <code style="background:rgba(255,255,255,0.1);padding:2px 8px;border-radius:4px;font-size:0.78rem;color:#fbbf24;">chrome://flags/#unsafely-treat-insecure-origin-as-secure</code>
+                        </li>
+                        <li>Qidiruv maydoniga quyidagini kiriting va <strong>Enabled</strong> qiling:<br>
+                          <code style="background:rgba(255,255,255,0.1);padding:2px 8px;border-radius:4px;font-size:0.78rem;color:#34d399;">${origin}</code>
+                        </li>
+                        <li><strong>Relaunch</strong> tugmasini bosib brauzerni qayta ishga tushiring</li>
+                      </ol>
+                    </div>
+                    <button onclick="document.getElementById('secure-ctx-modal').remove()" 
+                            style="width:100%;padding:0.6rem;background:#6366f1;border:none;border-radius:8px;color:#fff;font-weight:600;cursor:pointer;font-size:0.9rem;">
+                      Tushundim
+                    </button>
+                  </div>`;
+                document.body.appendChild(modal);
+                modal.addEventListener('click', function(e){ if(e.target===modal) modal.remove(); });
+                return;
+            }
+
+
+            try {
+                let stream = null;
+                const audioConstraints = { echoCancellation: true, noiseSuppression: true };
+                
+                if (sourceType === 'WEBCAM') {
+                    stream = await navigator.mediaDevices.getUserMedia({ 
+                        video: { width: 1280, height: 720 }, 
+                        audio: audioConstraints 
+                    });
+                } else if (sourceType === 'SCREEN_SHARE' || sourceType === 'WEB_BROWSER') {
+                    stream = await navigator.mediaDevices.getDisplayMedia({ 
+                        video: true, 
+                        audio: audioConstraints 
+                    });
+                }
+
+                localStreams[sourceId] = stream;
+                video.srcObject = stream;
+                video.muted = true; // prevent audio feedback loop
+                video.play();
+                
+                isDeviceActive[sourceId] = true;
+                captureBtn.innerHTML = `<i class="fa-solid fa-stop me-1"></i> {% translate 'Stop Preview' %}`;
+                captureBtn.className = 'btn btn-danger btn-sm flex-grow-1';
+                streamBtn.disabled = false;
+            } catch (err) {
+                console.error("Device capture failed:", err);
+                alert("{% translate 'Failed to acquire media device.' %}");
+            }
+        } else {
+            stopAllLocalMedia(sourceId);
+            captureBtn.innerHTML = `<i class="fa-solid fa-play me-1"></i> {% translate 'Preview' %}`;
+            captureBtn.className = 'btn btn-outline-light btn-sm flex-grow-1';
+            streamBtn.disabled = true;
+        }
+    }
+
+    async function toggleRTSPStreaming(sourceId, currentStatus) {
+        const streamBtn = document.getElementById(`btn-stream-toggle-${sourceId}`);
+        const isCurrentlyStreaming = currentStatus === 'online' || currentStatus === 'recording';
+        const endpoint = isCurrentlyStreaming ? '/api/stop-stream/' : '/api/start-stream/';
+        
+        try {
+            const res = await fetch(endpoint, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': '{{ csrf_token }}'
+                },
+                body: JSON.stringify({ source_id: sourceId })
+            });
+            
+            if (res.ok) {
+                const data = await res.json();
+                
+                // Update badge and stream button state
+                const badge = document.getElementById(`badge-status-${sourceId}`);
+                {% if request.user.is_staff %}
+                badge.innerText = data.source_status;
+                badge.className = `badge ${data.source_status === 'online' || data.source_status === 'recording' ? (data.source_status === 'recording' ? 'bg-danger' : 'bg-success') : 'bg-secondary'} px-2 py-0.5 text-uppercase`;
+                const indicator = document.getElementById(`indicator-${sourceId}`);
+                indicator.className = `indicator-pulse ${data.source_status === 'online' || data.source_status === 'recording' ? (data.source_status === 'recording' ? 'bg-danger' : 'bg-success') : 'bg-secondary'}`;
+                {% else %}
+                badge.innerText = (data.source_status === 'recording' ? 'LIVE' : data.source_status).toUpperCase();
+                badge.className = `badge ${data.source_status === 'online' || data.source_status === 'recording' ? 'bg-success' : 'bg-secondary'} px-2 py-0.5 text-uppercase`;
+                const indicator = document.getElementById(`indicator-${sourceId}`);
+                indicator.className = `indicator-pulse ${data.source_status === 'online' || data.source_status === 'recording' ? 'bg-success' : 'bg-secondary'}`;
+                {% endif %}
+                
+                if (!isCurrentlyStreaming) {
+                    playMediaMTXFeed(sourceId);
+                    streamBtn.innerHTML = `<i class="fa-solid fa-stop me-1"></i> {% translate 'Stop RTSP' %}`;
+                    streamBtn.className = 'btn btn-danger btn-sm flex-grow-1';
+                    
+                    // Bind toggle state
+                    streamBtn.setAttribute('onclick', `toggleRTSPStreaming(${sourceId}, '${data.source_status}')`);
+                } else {
+                    stopAllLocalMedia(sourceId);
+                    streamBtn.innerHTML = `<i class="fa-solid fa-tower-broadcast me-1"></i> {% translate 'Start RTSP' %}`;
+                    streamBtn.className = 'btn btn-success btn-sm flex-grow-1';
+                    streamBtn.setAttribute('onclick', `toggleRTSPStreaming(${sourceId}, '${data.source_status}')`);
+                }
+            }
+        } catch (err) {
+            console.error("RTSP stream toggle failed:", err);
+        }
+    }
+
+    async function toggleWebRTCStreaming(sourceId, streamBaseUrl) {
+        const streamBtn = document.getElementById(`btn-stream-toggle-${sourceId}`);
+        const isRecEnabled = document.getElementById(`local-rec-checkbox-${sourceId}`)?.checked || false;
+
+        if (!isStreamingActive[sourceId]) {
+            try {
+                const whipUrl = `${streamBaseUrl}whip`;
+                const iceServers = [];
+                const stunUrls = "{{ stun_url }}".split(",").map(url => url.trim());
+                stunUrls.forEach(url => { if (url) iceServers.push({ urls: url }); });
+                const turnUrls = "{{ turn_url }}".split(",").map(url => url.trim());
+                turnUrls.forEach(url => { 
+                    if (url) {
+                        iceServers.push({ 
+                            urls: url,
+                            username: 'username',
+                            credential: 'password'
+                        }); 
+                    }
+                });
+
+                const pc = new RTCPeerConnection({ iceServers: iceServers });
+                peerConnections[sourceId] = pc;
+
+                const stream = localStreams[sourceId];
+                stream.getTracks().forEach(track => pc.addTrack(track, stream));
+
+                pc.onconnectionstatechange = async () => {
+                    const state = pc.connectionState;
+                    console.log(`[Source ${sourceId}] WHIP connection state:`, state);
+                    if (state === 'failed' || state === 'closed') {
+                        isStreamingActive[sourceId] = false;
+                        streamBtn.innerHTML = `<i class="fa-solid fa-tower-broadcast me-1"></i> {% translate 'Start Stream' %}`;
+                        streamBtn.className = 'btn btn-success btn-sm flex-grow-1';
+                        try {
+                            await fetch('/api/stop-stream/', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json', 'X-CSRFToken': '{{ csrf_token }}' },
+                                body: JSON.stringify({ source_id: sourceId })
+                            });
+                        } catch(e) {}
+                    }
+                };
+
+                const offer = await pc.createOffer();
+                await pc.setLocalDescription(offer);
+
+                const whipRes = await fetch(whipUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/sdp' },
+                    body: offer.sdp
+                });
+
+                if (whipRes.status === 200 || whipRes.status === 201) {
+                    const answerSdp = await whipRes.text();
+                    await pc.setRemoteDescription(new RTCSessionDescription({
+                        type: 'answer',
+                        sdp: answerSdp
+                    }));
+
+                    await fetch('/api/start-stream/', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': '{{ csrf_token }}' },
+                        body: JSON.stringify({ source_id: sourceId })
+                    });
+                    
+                    isStreamingActive[sourceId] = true;
+                    streamBtn.innerHTML = `<i class="fa-solid fa-stop me-1"></i> {% translate 'Stop Stream' %}`;
+                    streamBtn.className = 'btn btn-danger btn-sm flex-grow-1';
+                    
+                    const badge = document.getElementById(`badge-status-${sourceId}`);
+                    {% if request.user.is_staff %}
+                    badge.innerText = isRecEnabled ? 'recording' : 'online';
+                    badge.className = `badge ${isRecEnabled ? 'bg-danger' : 'bg-success'} px-2 py-0.5 text-uppercase`;
+                    const indicator = document.getElementById(`indicator-${sourceId}`);
+                    indicator.className = `indicator-pulse ${isRecEnabled ? 'bg-danger' : 'bg-success'}`;
+                    {% else %}
+                    badge.innerText = 'LIVE';
+                    badge.className = 'badge bg-success px-2 py-0.5 text-uppercase';
+                    const indicator = document.getElementById(`indicator-${sourceId}`);
+                    indicator.className = 'indicator-pulse bg-success';
+                    {% endif %}
+
+                    if (isRecEnabled) {
+                        startLocalRecording(sourceId);
+                    }
+                } else {
+                    throw new Error(`MediaMTX WHIP rejected (HTTP ${whipRes.status}).`);
+                }
+            } catch (err) {
+                console.error("WebRTC streaming publish error:", err);
+                alert("{% translate 'Failed to publish WebRTC stream.' %}\nError: " + err.message);
+            }
+        } else {
+            if (isRecordingActive[sourceId]) {
+                stopLocalRecording(sourceId);
+            }
+            
+            try {
+                await fetch('/api/stop-stream/', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'X-CSRFToken': '{{ csrf_token }}' },
+                    body: JSON.stringify({ source_id: sourceId })
+                });
+            } catch (err) {
+                console.error(err);
+            }
+
+            stopAllLocalMedia(sourceId);
+            streamBtn.innerHTML = `<i class="fa-solid fa-tower-broadcast me-1"></i> {% translate 'Start Stream' %}`;
+            streamBtn.className = 'btn btn-success btn-sm flex-grow-1';
+            
+            const captureBtn = document.getElementById(`btn-device-capture-${sourceId}`);
+            captureBtn.innerHTML = `<i class="fa-solid fa-play me-1"></i> {% translate 'Preview' %}`;
+            captureBtn.className = 'btn btn-outline-light btn-sm flex-grow-1';
+            streamBtn.disabled = true;
+
+            const badge = document.getElementById(`badge-status-${sourceId}`);
+            badge.innerText = 'offline';
+            badge.className = 'badge bg-secondary px-2 py-0.5 text-uppercase';
+            const indicator = document.getElementById(`indicator-${sourceId}`);
+            indicator.className = 'indicator-pulse bg-secondary';
+        }
+    }
+
+    function startLocalRecording(sourceId) {
+        recordedChunks[sourceId] = [];
+        const stream = localStreams[sourceId];
+        const recorder = new MediaRecorder(stream, { mimeType: 'video/webm;codecs=vp8' });
+        mediaRecorders[sourceId] = recorder;
+        
+        recorder.ondataavailable = (event) => {
+            if (event.data.size > 0) {
+                recordedChunks[sourceId].push(event.data);
+            }
+        };
+
+        recorder.onstop = () => {
+            uploadRecordedClip(sourceId);
+        };
+
+        recorder.start(1000);
+        isRecordingActive[sourceId] = true;
+        
+        const recTag = document.getElementById(`rec-tag-${sourceId}`);
+        if (recTag) recTag.style.display = 'inline-block';
+        
+        const statsOverlay = document.getElementById(`stats-overlay-${sourceId}`);
+        if (statsOverlay) statsOverlay.style.display = 'block';
+        
+        fetch('/api/start-record/', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': '{{ csrf_token }}' },
+            body: JSON.stringify({ source_id: sourceId })
+        }).catch(err => console.error(err));
+
+        recordingStartTimes[sourceId] = Date.now();
+        recordingTimers[sourceId] = setInterval(() => {
+            const diff = Date.now() - recordingStartTimes[sourceId];
+            const hrs = Math.floor(diff / 3600000).toString().padStart(2, '0');
+            const mins = Math.floor((diff % 3600000) / 60000).toString().padStart(2, '0');
+            const secs = Math.floor((diff % 60000) / 1000).toString().padStart(2, '0');
+            const timerText = document.getElementById(`rec-timer-${sourceId}`);
+            if (timerText) timerText.innerText = `${hrs}:${mins}:${secs}`;
+        }, 1000);
+    }
+
+    function stopLocalRecording(sourceId) {
+        const recorder = mediaRecorders[sourceId];
+        if (recorder && recorder.state !== 'inactive') {
+            recorder.stop();
+        }
+        isRecordingActive[sourceId] = false;
+        
+        const recTag = document.getElementById(`rec-tag-${sourceId}`);
+        if (recTag) recTag.style.display = 'none';
+        
+        if (recordingTimers[sourceId]) {
+            clearInterval(recordingTimers[sourceId]);
+            delete recordingTimers[sourceId];
+        }
+        
+        fetch('/api/stop-record/', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': '{{ csrf_token }}' },
+            body: JSON.stringify({ source_id: sourceId })
+        }).catch(err => console.error(err));
+    }
+
+    async function uploadRecordedClip(sourceId) {
+        const chunks = recordedChunks[sourceId];
+        if (!chunks || chunks.length === 0) return;
+        
+        const blob = new Blob(chunks, { type: 'video/webm' });
+        const startTime = recordingStartTimes[sourceId] || Date.now();
+        const durationSec = Math.round((Date.now() - startTime) / 1000);
+        const filename = `${new Date().toISOString().replace(/T/, '_').replace(/\..+/, '').replace(/:/g, '-')}.mp4`;
+        
+        const formData = new FormData();
+        formData.append('file', blob, filename);
+        formData.append('filename', filename);
+        formData.append('duration', durationSec);
+        formData.append('filesize', blob.size);
+        formData.append('live_source', sourceId);
+        
+        console.log(`Uploading local recording for source ${sourceId}...`);
+        
+        try {
+            const res = await fetch('/api/recordings/', {
+                method: 'POST',
+                headers: { 'X-CSRFToken': '{{ csrf_token }}' },
+                body: formData
+            });
+            if (res.ok) {
+                console.log(`Recording for source ${sourceId} successfully uploaded.`);
+            }
+        } catch (err) {
+            console.error(err);
+        }
+    }
+
+    function playMediaMTXFeed(sourceId) {
+        const video = document.getElementById(`preview-video-${sourceId}`);
+        const hlsBase = "{{ mediamtx_hls_url }}";
+        const webrtcBase = "{{ mediamtx_webrtc_url }}";
+        const streamName = `source_${sourceId}`;
+        
+        const whepUrl = `${webrtcBase}/${streamName}/whep`;
+        const hlsUrl = `${hlsBase}/${streamName}/index.m3u8`;
+
+        fetch(whepUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/sdp' },
+            body: ''
+        }).then(res => {
+            if (res.status === 200 || res.status === 405 || res.status === 400) {
+                playWebRTC(sourceId, whepUrl);
+            } else {
+                playHLS(sourceId, hlsUrl);
+            }
+        }).catch(() => {
+            playHLS(sourceId, hlsUrl);
+        });
+    }
+
+    async function playWebRTC(sourceId, whepUrl) {
+        const video = document.getElementById(`preview-video-${sourceId}`);
+        const iceServers = [];
+        const stunUrls = "{{ stun_url }}".split(",").map(url => url.trim());
+        stunUrls.forEach(url => { if (url) iceServers.push({ urls: url }); });
+        
+        const pc = new RTCPeerConnection({ iceServers: iceServers });
+        peerConnections[sourceId] = pc;
+
+        pc.ontrack = (event) => {
+            video.srcObject = event.streams[0];
+            video.play();
+        };
+
+        pc.addTransceiver('video', { direction: 'recvonly' });
+        pc.addTransceiver('audio', { direction: 'recvonly' });
+
+        const offer = await pc.createOffer();
+        await pc.setLocalDescription(offer);
+
+        const response = await fetch(whepUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/sdp' },
+            body: offer.sdp
+        });
+        
+        if (response.status === 200 || response.status === 201) {
+            const answerSdp = await response.text();
+            await pc.setRemoteDescription(new RTCSessionDescription({
+                type: 'answer',
+                sdp: answerSdp
+            }));
+        }
+    }
+
+    function playHLS(sourceId, hlsUrl) {
+        const video = document.getElementById(`preview-video-${sourceId}`);
+        if (Hls.isSupported()) {
+            const hls = new Hls({ maxMaxBufferLength: 5 });
+            hls.loadSource(hlsUrl);
+            hls.attachMedia(video);
+            hls.on(Hls.Events.MANIFEST_PARSED, () => video.play());
+        } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+            video.src = hlsUrl;
+            video.addEventListener('loadedmetadata', () => video.play());
+        }
+    }
+
+    function toggleRecordingPreference(sourceId) {
+        const isChecked = document.getElementById(`local-rec-checkbox-${sourceId}`).checked;
+        if (isStreamingActive[sourceId]) {
+            if (isChecked && !isRecordingActive[sourceId]) {
+                startLocalRecording(sourceId);
+            } else if (!isChecked && isRecordingActive[sourceId]) {
+                stopLocalRecording(sourceId);
+            }
+        }
+    }
+
+    function toggleAudioMute(sourceId) {
+        const video = document.getElementById(`preview-video-${sourceId}`);
+        const muteBtn = document.getElementById(`btn-mute-${sourceId}`);
+        const stream = localStreams[sourceId];
+        
+        if (stream) {
+            const audioTracks = stream.getAudioTracks();
+            if (audioTracks.length > 0) {
+                const isEnabled = audioTracks[0].enabled;
+                audioTracks[0].enabled = !isEnabled;
+                
+                muteBtn.innerHTML = !isEnabled ? 
+                    `<i class="fa-solid fa-microphone"></i>` : 
+                    `<i class="fa-solid fa-microphone-slash"></i>`;
+                muteBtn.className = !isEnabled ? 'btn btn-dark btn-sm bg-opacity-75 border-0 p-1 px-2 text-success' : 'btn btn-dark btn-sm bg-opacity-75 border-0 p-1 px-2';
+            }
+        } else {
+            video.muted = !video.muted;
+            muteBtn.innerHTML = !video.muted ? 
+                `<i class="fa-solid fa-volume-high"></i>` : 
+                `<i class="fa-solid fa-volume-xmark"></i>`;
+        }
+    }
+
+    function togglePreviewFullscreen(sourceId) {
+        const video = document.getElementById(`preview-video-${sourceId}`);
+        if (video.requestFullscreen) {
+            video.requestFullscreen();
+        } else if (video.webkitRequestFullscreen) {
+            video.webkitRequestFullscreen();
+        } else if (video.msRequestFullscreen) {
+            video.msRequestFullscreen();
+        }
+    }
+
+    document.addEventListener("DOMContentLoaded", () => {
+        // Automatically play any actively streaming RTSP IP Cameras on load
+        {% for s in sources %}
+            {% if s.source_type == 'IP_CAMERA' and s.status == 'online' or s.status == 'recording' %}
+                playMediaMTXFeed('{{ s.id }}');
+            {% endif %}
+        {% endfor %}
+    });
+
+    window.addEventListener("beforeunload", () => {
+        // Clean up all active streams on exit
+        Object.keys(localStreams).forEach(id => stopAllLocalMedia(id));
+    });
+</script>
+{% endblock %}

@@ -1,0 +1,85 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+:root {
+    --font-body: 'Inter', system-ui, -apple-system, sans-serif;
+
+    /* Light Theme */
+    --primary-color: #2563EB;
+    --primary-hover: #1D4ED8;
+    --secondary-color: #1E293B;
+    --accent-color: #06B6D4;
+    --success-color: #10B981;
+    --warning-color: #F59E0B;
+    --danger-color: #EF4444;
+    --bg-color: #F8FAFC;
+    --sidebar-bg: #0F172A;
+    --sidebar-color: #94A3B8;
+    --sidebar-active-bg: #1E293B;
+    --sidebar-active-color: #F8FAFC;
+    --card-bg: #FFFFFF;
+    --text-color: #1E293B;
+    --text-muted: #64748B;
+    --border-color: #E2E8F0;
+    --topbar-bg: #FFFFFF;
+    
+    --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+    --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1);
+    --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.1);
+    --glass-bg: rgba(255, 255, 255, 0.7);
+    --glass-blur: blur(12px);
+}
+
+[data-theme="dark"] {
+    /* Dark Theme (SOC Mode) */
+    --bg-color: #0B1120;
+    --card-bg: #1E293B;
+    --text-color: #F8FAFC;
+    --text-muted: #94A3B8;
+    --border-color: #334155;
+    --topbar-bg: #1E293B;
+    --glass-bg: rgba(30, 41, 59, 0.7);
+    --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.5);
+    --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.4), 0 2px 4px -2px rgba(0, 0, 0, 0.4);
+    --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.5), 0 4px 6px -4px rgba(0, 0, 0, 0.5);
+}
+
+body {
+    font-family: var(--font-body);
+    background-color: var(--bg-color);
+    color: var(--text-color);
+    transition: background-color 0.25s ease, color 0.25s ease;
+    min-height: 100vh;
+}
+
+/* Bootstrap Dark Mode Overrides for VMS */
+[data-theme="dark"] .text-dark {
+    color: var(--text-color) !important;
+}
+
+[data-theme="dark"] .text-muted, [data-theme="dark"] .text-white-50 {
+    color: var(--text-muted) !important;
+}
+
+[data-theme="dark"] .bg-light,
+[data-theme="dark"] .bg-light-subtle {
+    background-color: rgba(30, 41, 59, 0.4) !important;
+    color: var(--text-color) !important;
+}
+
+[data-theme="dark"] .border,
+[data-theme="dark"] .border-top,
+[data-theme="dark"] .border-bottom,
+[data-theme="dark"] .border-start,
+[data-theme="dark"] .border-end {
+    border-color: var(--border-color) !important;
+}
+
+[data-theme="dark"] .card-title, [data-theme="dark"] strong {
+    color: var(--text-color) !important;
+}
+
+[data-theme="dark"] select.form-select option {
+    background-color: var(--card-bg) !important;
+    color: var(--text-color) !important;
+}
+
