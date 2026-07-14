@@ -444,6 +444,10 @@
         const isRecEnabled = document.getElementById(`local-rec-checkbox-${sourceId}`)?.checked || false;
 
         if (!isStreamingActive[sourceId]) {
+            // Disable button immediately to prevent double-clicks
+            streamBtn.disabled = true;
+            streamBtn.innerHTML = `<i class="fa-solid fa-spinner fa-spin me-1"></i> {% translate 'Connecting...' %}`;
+
             try {
                 const whipUrl = `${streamBaseUrl}whip`;
                 console.log(`[Source ${sourceId}] Initiating WHIP publish to:`, whipUrl);
@@ -478,9 +482,40 @@
                     const state = pc.connectionState;
                     console.log(`[Source ${sourceId}] Publisher PeerConnection state:`, state);
                     if (state === 'failed' || state === 'closed') {
-                        console.warn(`[Source ${sourceId}] Publisher connection failed/closed. Reverting UI.`);
+                        console.warn(`[Source ${sourceId}] Publisher connection failed or closed.`);
+                        // Only trigger cleanup if it is currently marked as active
                         if (isStreamingActive[sourceId]) {
-                            toggleWebRTCStreaming(sourceId, streamBaseUrl);
+                            isStreamingActive[sourceId] = false;
+                            stopAllLocalMedia(sourceId);
+                            
+                            const btn = document.getElementById(`btn-stream-toggle-${sourceId}`);
+                            if (btn) {
+                                btn.innerHTML = `<i class="fa-solid fa-tower-broadcast me-1"></i> {% translate 'Start Stream' %}`;
+                                btn.className = 'btn btn-success btn-sm flex-grow-1';
+                                btn.disabled = true; 
+                            }
+                            
+                            const captureBtn = document.getElementById(`btn-device-capture-${sourceId}`);
+                            if (captureBtn) {
+                                captureBtn.innerHTML = `<i class="fa-solid fa-play me-1"></i> {% translate 'Preview' %}`;
+                                captureBtn.className = 'btn btn-outline-light btn-sm flex-grow-1';
+                            }
+
+                            const badge = document.getElementById(`badge-status-${sourceId}`);
+                            if (badge) {
+                                badge.innerText = 'offline';
+                                badge.className = 'badge bg-secondary px-2 py-0.5 text-uppercase';
+                            }
+                            const indicator = document.getElementById(`indicator-${sourceId}`);
+                            if (indicator) {
+                                indicator.className = 'indicator-pulse bg-secondary';
+                            }
+
+                            fetch('/api/stop-stream/', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json', 'X-CSRFToken': '{{ csrf_token }}' },
+                                body: JSON.stringify({ source_id: sourceId })
+                            }).catch(() => {});
                         }
                     }
                 };
@@ -543,6 +578,7 @@
                     isStreamingActive[sourceId] = true;
                     streamBtn.innerHTML = `<i class="fa-solid fa-stop me-1"></i> {% translate 'Stop Stream' %}`;
                     streamBtn.className = 'btn btn-danger btn-sm flex-grow-1';
+                    streamBtn.disabled = false; // re-enable button as "Stop Stream"
                     
                     const badge = document.getElementById(`badge-status-${sourceId}`);
                     {% if request.user.is_staff %}
@@ -568,6 +604,12 @@
             } catch (err) {
                 console.error(`[Source ${sourceId}] WebRTC streaming publish error:`, err);
                 alert("{% translate 'Failed to publish WebRTC stream.' %}\nError: " + err.message);
+                
+                // Re-enable button to allow trying again
+                streamBtn.innerHTML = `<i class="fa-solid fa-tower-broadcast me-1"></i> {% translate 'Start Stream' %}`;
+                streamBtn.className = 'btn btn-success btn-sm flex-grow-1';
+                streamBtn.disabled = false;
+
                 if (publisherPeerConnections[sourceId]) {
                     publisherPeerConnections[sourceId].close();
                     delete publisherPeerConnections[sourceId];
