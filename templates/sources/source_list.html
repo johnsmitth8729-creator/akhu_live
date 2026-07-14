@@ -177,7 +177,10 @@
 <script>
     // Concurrent states objects mapped by source ID
     const localStreams = {};
-    const peerConnections = {};
+    const publisherPeerConnections = {};
+    const viewerPeerConnections = {};
+    const publisherSessionUrls = {};
+    const viewerSessionUrls = {};
     const mediaRecorders = {};
     const recordedChunks = {};
     const recordingTimers = {};
@@ -186,15 +189,83 @@
     const isDeviceActive = {};
     const isRecordingActive = {};
 
+    function resolveLocation(baseUrl, locationHeader) {
+        if (!locationHeader) return null;
+        if (locationHeader.startsWith('http://') || locationHeader.startsWith('https://')) {
+            return locationHeader;
+        }
+        if (locationHeader.startsWith('/')) {
+            const urlObj = new URL(baseUrl);
+            return `${urlObj.origin}${locationHeader}`;
+        }
+        return `${baseUrl}/${locationHeader}`;
+    }
+
+    function waitForIceGathering(pc) {
+        return new Promise((resolve) => {
+            if (pc.iceGatheringState === 'complete') {
+                resolve();
+            } else {
+                function checkState() {
+                    if (pc.iceGatheringState === 'complete') {
+                        pc.removeEventListener('icecandidate', onIceCandidate);
+                        pc.removeEventListener('icegatheringstatechange', checkState);
+                        resolve();
+                    }
+                }
+                function onIceCandidate(event) {
+                    if (!event.candidate) {
+                        pc.removeEventListener('icecandidate', onIceCandidate);
+                        pc.removeEventListener('icegatheringstatechange', checkState);
+                        resolve();
+                    }
+                }
+                pc.addEventListener('icecandidate', onIceCandidate);
+                pc.addEventListener('icegatheringstatechange', checkState);
+                
+                setTimeout(() => {
+                    pc.removeEventListener('icecandidate', onIceCandidate);
+                    pc.removeEventListener('icegatheringstatechange', checkState);
+                    resolve();
+                }, 2000);
+            }
+        });
+    }
+
     function stopAllLocalMedia(sourceId) {
+        console.log(`[Source ${sourceId}] stopAllLocalMedia called.`);
         if (localStreams[sourceId]) {
-            localStreams[sourceId].getTracks().forEach(track => track.stop());
+            localStreams[sourceId].getTracks().forEach(track => {
+                track.stop();
+                console.log(`[Source ${sourceId}] Local track stopped:`, track.kind);
+            });
             delete localStreams[sourceId];
         }
-        if (peerConnections[sourceId]) {
-            peerConnections[sourceId].close();
-            delete peerConnections[sourceId];
+        
+        if (publisherPeerConnections[sourceId]) {
+            console.log(`[Source ${sourceId}] Closing publisher PeerConnection.`);
+            publisherPeerConnections[sourceId].close();
+            delete publisherPeerConnections[sourceId];
         }
+        if (publisherSessionUrls[sourceId]) {
+            const url = publisherSessionUrls[sourceId];
+            console.log(`[Source ${sourceId}] Sending DELETE to WHIP session:`, url);
+            fetch(url, { method: 'DELETE' }).catch(err => console.warn("Failed to delete publisher session:", err));
+            delete publisherSessionUrls[sourceId];
+        }
+
+        if (viewerPeerConnections[sourceId]) {
+            console.log(`[Source ${sourceId}] Closing viewer PeerConnection.`);
+            viewerPeerConnections[sourceId].close();
+            delete viewerPeerConnections[sourceId];
+        }
+        if (viewerSessionUrls[sourceId]) {
+            const url = viewerSessionUrls[sourceId];
+            console.log(`[Source ${sourceId}] Sending DELETE to WHEP session:`, url);
+            fetch(url, { method: 'DELETE' }).catch(err => console.warn("Failed to delete viewer session:", err));
+            delete viewerSessionUrls[sourceId];
+        }
+
         if (mediaRecorders[sourceId] && mediaRecorders[sourceId].state !== 'inactive') {
             try { mediaRecorders[sourceId].stop(); } catch(e) {}
             delete mediaRecorders[sourceId];
@@ -368,12 +439,15 @@
     }
 
     async function toggleWebRTCStreaming(sourceId, streamBaseUrl) {
+        console.log(`[Source ${sourceId}] toggleWebRTCStreaming called. Active state:`, isStreamingActive[sourceId]);
         const streamBtn = document.getElementById(`btn-stream-toggle-${sourceId}`);
         const isRecEnabled = document.getElementById(`local-rec-checkbox-${sourceId}`)?.checked || false;
 
         if (!isStreamingActive[sourceId]) {
             try {
                 const whipUrl = `${streamBaseUrl}whip`;
+                console.log(`[Source ${sourceId}] Initiating WHIP publish to:`, whipUrl);
+                
                 const iceServers = [];
                 const stunUrls = "{{ stun_url }}".split(",").map(url => url.trim());
                 stunUrls.forEach(url => { if (url) iceServers.push({ urls: url }); });
@@ -388,50 +462,83 @@
                     }
                 });
 
+                console.log(`[Source ${sourceId}] Creating publisher PeerConnection with ICE servers:`, iceServers);
                 const pc = new RTCPeerConnection({ iceServers: iceServers });
-                peerConnections[sourceId] = pc;
+                publisherPeerConnections[sourceId] = pc;
 
                 const stream = localStreams[sourceId];
+                if (!stream) {
+                    throw new Error("No active local stream captured to publish. Please start Preview first.");
+                }
+                
+                console.log(`[Source ${sourceId}] Adding tracks to publisher PeerConnection...`);
                 stream.getTracks().forEach(track => pc.addTrack(track, stream));
 
-                pc.onconnectionstatechange = async () => {
+                pc.onconnectionstatechange = () => {
                     const state = pc.connectionState;
-                    console.log(`[Source ${sourceId}] WHIP connection state:`, state);
+                    console.log(`[Source ${sourceId}] Publisher PeerConnection state:`, state);
                     if (state === 'failed' || state === 'closed') {
-                        isStreamingActive[sourceId] = false;
-                        streamBtn.innerHTML = `<i class="fa-solid fa-tower-broadcast me-1"></i> {% translate 'Start Stream' %}`;
-                        streamBtn.className = 'btn btn-success btn-sm flex-grow-1';
-                        try {
-                            await fetch('/api/stop-stream/', {
-                                method: 'POST',
-                                headers: { 'Content-Type': 'application/json', 'X-CSRFToken': '{{ csrf_token }}' },
-                                body: JSON.stringify({ source_id: sourceId })
-                            });
-                        } catch(e) {}
+                        console.warn(`[Source ${sourceId}] Publisher connection failed/closed. Reverting UI.`);
+                        if (isStreamingActive[sourceId]) {
+                            toggleWebRTCStreaming(sourceId, streamBaseUrl);
+                        }
                     }
                 };
 
+                pc.oniceconnectionstatechange = () => {
+                    console.log(`[Source ${sourceId}] Publisher ICE connection state:`, pc.iceConnectionState);
+                };
+
+                pc.onicegatheringstatechange = () => {
+                    console.log(`[Source ${sourceId}] Publisher ICE gathering state:`, pc.iceGatheringState);
+                };
+
+                console.log(`[Source ${sourceId}] Creating offer...`);
                 const offer = await pc.createOffer();
+                console.log(`[Source ${sourceId}] Setting local description...`);
                 await pc.setLocalDescription(offer);
 
+                console.log(`[Source ${sourceId}] Waiting for ICE gathering to complete...`);
+                await waitForIceGathering(pc);
+                console.log(`[Source ${sourceId}] ICE gathering completed.`);
+
+                const sdpToSend = pc.localDescription.sdp;
+                console.log(`[Source ${sourceId}] Sending offer SDP to WHIP endpoint...`);
+                
                 const whipRes = await fetch(whipUrl, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/sdp' },
-                    body: offer.sdp
+                    body: sdpToSend
                 });
 
                 if (whipRes.status === 200 || whipRes.status === 201) {
+                    console.log(`[Source ${sourceId}] WHIP publish accepted. Status:`, whipRes.status);
+                    
+                    const locationHeader = whipRes.headers.get('Location');
+                    if (locationHeader) {
+                        const resolvedUrl = resolveLocation(whipUrl, locationHeader);
+                        publisherSessionUrls[sourceId] = resolvedUrl;
+                        console.log(`[Source ${sourceId}] Stored publisher session URL:`, resolvedUrl);
+                    } else {
+                        console.warn(`[Source ${sourceId}] WHIP response did not contain Location header.`);
+                    }
+
                     const answerSdp = await whipRes.text();
+                    console.log(`[Source ${sourceId}] Setting remote description (Answer SDP)...`);
                     await pc.setRemoteDescription(new RTCSessionDescription({
                         type: 'answer',
                         sdp: answerSdp
                     }));
 
-                    await fetch('/api/start-stream/', {
+                    console.log(`[Source ${sourceId}] Registering stream online state with Django...`);
+                    const startRes = await fetch('/api/start-stream/', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json', 'X-CSRFToken': '{{ csrf_token }}' },
                         body: JSON.stringify({ source_id: sourceId })
                     });
+                    if (!startRes.ok) {
+                        throw new Error(`Django start-stream endpoint returned HTTP ${startRes.status}`);
+                    }
                     
                     isStreamingActive[sourceId] = true;
                     streamBtn.innerHTML = `<i class="fa-solid fa-stop me-1"></i> {% translate 'Stop Stream' %}`;
@@ -453,35 +560,46 @@
                     if (isRecEnabled) {
                         startLocalRecording(sourceId);
                     }
+                    console.log(`[Source ${sourceId}] Streaming started successfully.`);
                 } else {
-                    throw new Error(`MediaMTX WHIP rejected (HTTP ${whipRes.status}).`);
+                    const errorText = await whipRes.text();
+                    throw new Error(`WHIP Server rejected offer (HTTP ${whipRes.status}). Details: ${errorText}`);
                 }
             } catch (err) {
-                console.error("WebRTC streaming publish error:", err);
+                console.error(`[Source ${sourceId}] WebRTC streaming publish error:`, err);
                 alert("{% translate 'Failed to publish WebRTC stream.' %}\nError: " + err.message);
+                if (publisherPeerConnections[sourceId]) {
+                    publisherPeerConnections[sourceId].close();
+                    delete publisherPeerConnections[sourceId];
+                }
             }
         } else {
+            console.log(`[Source ${sourceId}] Stopping stream...`);
             if (isRecordingActive[sourceId]) {
                 stopLocalRecording(sourceId);
             }
             
             try {
+                console.log(`[Source ${sourceId}] Deregistering stream with Django...`);
                 await fetch('/api/stop-stream/', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json', 'X-CSRFToken': '{{ csrf_token }}' },
                     body: JSON.stringify({ source_id: sourceId })
                 });
             } catch (err) {
-                console.error(err);
+                console.error(`[Source ${sourceId}] Error registering stop-stream:`, err);
             }
 
             stopAllLocalMedia(sourceId);
+            
             streamBtn.innerHTML = `<i class="fa-solid fa-tower-broadcast me-1"></i> {% translate 'Start Stream' %}`;
             streamBtn.className = 'btn btn-success btn-sm flex-grow-1';
             
             const captureBtn = document.getElementById(`btn-device-capture-${sourceId}`);
-            captureBtn.innerHTML = `<i class="fa-solid fa-play me-1"></i> {% translate 'Preview' %}`;
-            captureBtn.className = 'btn btn-outline-light btn-sm flex-grow-1';
+            if (captureBtn) {
+                captureBtn.innerHTML = `<i class="fa-solid fa-play me-1"></i> {% translate 'Preview' %}`;
+                captureBtn.className = 'btn btn-outline-light btn-sm flex-grow-1';
+            }
             streamBtn.disabled = true;
 
             const badge = document.getElementById(`badge-status-${sourceId}`);
@@ -489,6 +607,7 @@
             badge.className = 'badge bg-secondary px-2 py-0.5 text-uppercase';
             const indicator = document.getElementById(`indicator-${sourceId}`);
             indicator.className = 'indicator-pulse bg-secondary';
+            console.log(`[Source ${sourceId}] Streaming stopped successfully.`);
         }
     }
 
@@ -597,66 +716,155 @@
         const whepUrl = `${webrtcBase}/${streamName}/whep`;
         const hlsUrl = `${hlsBase}/${streamName}/index.m3u8`;
 
-        fetch(whepUrl, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/sdp' },
-            body: ''
-        }).then(res => {
-            if (res.status === 200 || res.status === 405 || res.status === 400) {
-                playWebRTC(sourceId, whepUrl);
-            } else {
-                playHLS(sourceId, hlsUrl);
-            }
-        }).catch(() => {
-            playHLS(sourceId, hlsUrl);
-        });
+        console.log(`[Source ${sourceId}] playMediaMTXFeed called. Attempting WebRTC play...`);
+        playWebRTC(sourceId, whepUrl, hlsUrl);
     }
 
-    async function playWebRTC(sourceId, whepUrl) {
+    async function playWebRTC(sourceId, whepUrl, hlsUrl) {
+        console.log(`[Source ${sourceId}] playWebRTC initiated to:`, whepUrl);
         const video = document.getElementById(`preview-video-${sourceId}`);
-        const iceServers = [];
-        const stunUrls = "{{ stun_url }}".split(",").map(url => url.trim());
-        stunUrls.forEach(url => { if (url) iceServers.push({ urls: url }); });
-        
-        const pc = new RTCPeerConnection({ iceServers: iceServers });
-        peerConnections[sourceId] = pc;
+        let fallbackTriggered = false;
 
-        pc.ontrack = (event) => {
-            video.srcObject = event.streams[0];
-            video.play();
+        const triggerHlsFallback = (reason) => {
+            if (fallbackTriggered) return;
+            fallbackTriggered = true;
+            console.warn(`[Source ${sourceId}] WebRTC playback failed (${reason}). Falling back to HLS at:`, hlsUrl);
+            
+            if (viewerPeerConnections[sourceId]) {
+                viewerPeerConnections[sourceId].close();
+                delete viewerPeerConnections[sourceId];
+            }
+            if (viewerSessionUrls[sourceId]) {
+                fetch(viewerSessionUrls[sourceId], { method: 'DELETE' }).catch(() => {});
+                delete viewerSessionUrls[sourceId];
+            }
+            
+            playHLS(sourceId, hlsUrl);
         };
 
-        pc.addTransceiver('video', { direction: 'recvonly' });
-        pc.addTransceiver('audio', { direction: 'recvonly' });
+        try {
+            const iceServers = [];
+            const stunUrls = "{{ stun_url }}".split(",").map(url => url.trim());
+            stunUrls.forEach(url => { if (url) iceServers.push({ urls: url }); });
+            
+            console.log(`[Source ${sourceId}] Creating subscriber PeerConnection with ICE servers:`, iceServers);
+            const pc = new RTCPeerConnection({ iceServers: iceServers });
+            viewerPeerConnections[sourceId] = pc;
 
-        const offer = await pc.createOffer();
-        await pc.setLocalDescription(offer);
+            console.log(`[Source ${sourceId}] Adding recvonly transceivers...`);
+            pc.addTransceiver('video', { direction: 'recvonly' });
+            pc.addTransceiver('audio', { direction: 'recvonly' });
 
-        const response = await fetch(whepUrl, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/sdp' },
-            body: offer.sdp
-        });
-        
-        if (response.status === 200 || response.status === 201) {
-            const answerSdp = await response.text();
-            await pc.setRemoteDescription(new RTCSessionDescription({
-                type: 'answer',
-                sdp: answerSdp
-            }));
+            pc.ontrack = (event) => {
+                console.log(`[Source ${sourceId}] Track received:`, event.track.kind);
+                let stream = event.streams[0];
+                if (!stream) {
+                    console.warn(`[Source ${sourceId}] No streams found on track event. Creating new MediaStream.`);
+                    stream = new MediaStream();
+                    stream.addTrack(event.track);
+                }
+                
+                if (video.srcObject !== stream) {
+                    video.srcObject = stream;
+                    console.log(`[Source ${sourceId}] Assigned srcObject.`);
+                }
+                
+                video.play().then(() => {
+                    console.log(`[Source ${sourceId}] Playback started successfully.`);
+                }).catch(err => {
+                    console.error(`[Source ${sourceId}] Video play failed:`, err);
+                });
+            };
+
+            pc.onconnectionstatechange = () => {
+                const state = pc.connectionState;
+                console.log(`[Source ${sourceId}] Subscriber PeerConnection state:`, state);
+                if (state === 'failed') {
+                    triggerHlsFallback("PeerConnection state failed");
+                }
+            };
+
+            pc.oniceconnectionstatechange = () => {
+                const state = pc.iceConnectionState;
+                console.log(`[Source ${sourceId}] Subscriber ICE connection state:`, state);
+                if (state === 'failed') {
+                    triggerHlsFallback("ICE connection state failed");
+                }
+            };
+
+            pc.onicegatheringstatechange = () => {
+                console.log(`[Source ${sourceId}] Subscriber ICE gathering state:`, pc.iceGatheringState);
+            };
+
+            console.log(`[Source ${sourceId}] Creating subscriber offer...`);
+            const offer = await pc.createOffer();
+            console.log(`[Source ${sourceId}] Setting subscriber local description...`);
+            await pc.setLocalDescription(offer);
+
+            console.log(`[Source ${sourceId}] Waiting for subscriber ICE gathering to complete...`);
+            await waitForIceGathering(pc);
+            console.log(`[Source ${sourceId}] Subscriber ICE gathering completed.`);
+
+            const sdpToSend = pc.localDescription.sdp;
+            console.log(`[Source ${sourceId}] Sending offer to WHEP endpoint:`, whepUrl);
+            
+            const response = await fetch(whepUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/sdp' },
+                body: sdpToSend
+            });
+            
+            if (response.status === 200 || response.status === 201) {
+                console.log(`[Source ${sourceId}] WHEP connection accepted. Status:`, response.status);
+                
+                const locationHeader = response.headers.get('Location');
+                if (locationHeader) {
+                    const resolvedUrl = resolveLocation(whepUrl, locationHeader);
+                    viewerSessionUrls[sourceId] = resolvedUrl;
+                    console.log(`[Source ${sourceId}] Stored viewer session URL:`, resolvedUrl);
+                }
+
+                const answerSdp = await response.text();
+                console.log(`[Source ${sourceId}] Setting remote description (Answer SDP)...`);
+                await pc.setRemoteDescription(new RTCSessionDescription({
+                    type: 'answer',
+                    sdp: answerSdp
+                }));
+            } else {
+                const errorText = await response.text();
+                throw new Error(`WHEP Server rejected offer (HTTP ${response.status}). Details: ${errorText}`);
+            }
+        } catch (err) {
+            console.error(`[Source ${sourceId}] WHEP handshake failed:`, err);
+            triggerHlsFallback(err.message);
         }
     }
 
     function playHLS(sourceId, hlsUrl) {
+        console.log(`[Source ${sourceId}] playHLS called with URL:`, hlsUrl);
         const video = document.getElementById(`preview-video-${sourceId}`);
         if (Hls.isSupported()) {
+            console.log(`[Source ${sourceId}] Hls.js is supported. Initializing player...`);
             const hls = new Hls({ maxMaxBufferLength: 5 });
             hls.loadSource(hlsUrl);
             hls.attachMedia(video);
-            hls.on(Hls.Events.MANIFEST_PARSED, () => video.play());
+            hls.on(Hls.Events.MANIFEST_PARSED, () => {
+                console.log(`[Source ${sourceId}] HLS manifest parsed. Starting playback.`);
+                video.play().catch(e => console.error(`[Source ${sourceId}] HLS play failed:`, e));
+            });
+            hls.on(Hls.Events.ERROR, (event, data) => {
+                if (data.fatal) {
+                    console.warn(`[Source ${sourceId}] Hls.js fatal error encountered:`, data.type);
+                }
+            });
         } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+            console.log(`[Source ${sourceId}] Native HLS supported. Loading URL...`);
             video.src = hlsUrl;
-            video.addEventListener('loadedmetadata', () => video.play());
+            video.addEventListener('loadedmetadata', () => {
+                video.play().catch(e => console.error(`[Source ${sourceId}] Native HLS play failed:`, e));
+            });
+        } else {
+            console.error(`[Source ${sourceId}] Neither Hls.js nor native HLS is supported by this browser.`);
         }
     }
 
