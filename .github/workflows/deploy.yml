@@ -1,0 +1,49 @@
+name: Deploy AKHU Live
+
+on:
+  push:
+    branches:
+      - main
+
+concurrency:
+  group: production
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: self-hosted
+
+    steps:
+      - name: Checkout latest code
+        uses: actions/checkout@v4
+
+      - name: Deploy application
+        shell: bash
+        run: |
+          set -e
+
+          cd /home/boss/akhu_live
+
+          echo "Updating repository..."
+          git fetch origin
+          git reset --hard origin/main
+
+          echo "Activating virtual environment..."
+          source venv/bin/activate
+
+          echo "Installing dependencies..."
+          pip install -r requirements.txt
+
+          echo "Running migrations..."
+          python manage.py migrate --noinput
+
+          echo "Collecting static files..."
+          python manage.py collectstatic --noinput
+
+          echo "Checking project..."
+          python manage.py check
+
+          echo "Restarting Gunicorn..."
+          sudo systemctl restart akhu_live
+
+          echo "Deployment completed successfully."
