@@ -30,12 +30,22 @@ class LiveSourceListView(SourceQuerysetMixin, ListView):
         context = super().get_context_data(**kwargs)
         
         request_host = self.request.get_host().split(':')[0]
+        request_scheme = 'https' if self.request.is_secure() else 'http'
+        is_prod = not getattr(settings, 'DEBUG', False)
         
         def get_dynamic_url(url_str):
             if not url_str:
                 return url_str
             if '127.0.0.1' in url_str or 'localhost' in url_str:
-                return url_str.replace('127.0.0.1', request_host).replace('localhost', request_host)
+                if is_prod:
+                    from urllib.parse import urlparse
+                    parsed = urlparse(url_str)
+                    path = parsed.path
+                    if not path.startswith('/'):
+                        path = '/' + path
+                    return f"{request_scheme}://{self.request.get_host()}{path}"
+                else:
+                    return url_str.replace('127.0.0.1', request_host).replace('localhost', request_host)
             return url_str
 
         db_settings = StreamingSetting.objects.first()

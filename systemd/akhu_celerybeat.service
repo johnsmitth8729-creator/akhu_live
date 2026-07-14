@@ -1,0 +1,15 @@
+[Unit]
+Description=Celery Beat Scheduler for AKHU Live Monitoring
+After=network.target postgresql.service redis-server.service
+
+[Service]
+Type=simple
+User=boss
+Group=www-data
+WorkingDirectory=/home/boss/akhu_live
+ExecStart=/home/boss/akhu_live/venv/bin/celery -A config beat --loglevel=info --pidfile=/tmp/celerybeat.pid
+Restart=always
+EnvironmentFile=/home/boss/akhu_live/.env
+
+[Install]
+WantedBy=multi-user.target

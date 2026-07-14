@@ -12,8 +12,8 @@ class MediaMTXService:
             db_settings = StreamingSetting.objects.first()
             if db_settings:
                 return db_settings.mediamtx_url
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning(f"Failed to fetch MediaMTX API URL from database StreamingSetting: {e}")
         return getattr(settings, 'MEDIAMTX_API_URL', 'http://127.0.0.1:9997')
 
     @classmethod
@@ -39,16 +39,19 @@ class MediaMTXService:
             "sourceOnDemand": True
         }
         
+        timeout = 3
         try:
-            response = requests.post(url, json=payload, timeout=3)
+            logger.info(f"Sending MediaMTX API Request: POST {url} - Timeout: {timeout}s - Payload: {payload}")
+            response = requests.post(url, json=payload, timeout=timeout)
+            logger.info(f"MediaMTX API Response: POST {url} - Status Code: {response.status_code} - Body: {response.text}")
             if response.status_code in (200, 201):
                 logger.info(f"Successfully registered stream {stream_name} on MediaMTX.")
                 return True
             else:
-                logger.error(f"Failed to register stream {stream_name} on MediaMTX: {response.text}")
+                logger.error(f"MediaMTX API Error: POST {url} failed with status {response.status_code}. Response: {response.text}")
                 return False
         except requests.exceptions.RequestException as e:
-            logger.error(f"Error connecting to MediaMTX API to add path: {e}")
+            logger.error(f"MediaMTX API Request Exception: POST {url} - Timeout: {timeout}s - Error: {e}")
             return False
 
     @classmethod
@@ -59,19 +62,22 @@ class MediaMTXService:
         stream_name = f"camera_{camera.id}"
         url = f"{cls.get_api_url()}/v3/config/paths/delete/{stream_name}"
         
+        timeout = 3
         try:
-            response = requests.post(url, timeout=3)
+            logger.info(f"Sending MediaMTX API Request: DELETE {url} - Timeout: {timeout}s")
+            response = requests.delete(url, timeout=timeout)
+            logger.info(f"MediaMTX API Response: DELETE {url} - Status Code: {response.status_code} - Body: {response.text}")
             if response.status_code in (200, 204):
                 logger.info(f"Successfully removed stream {stream_name} from MediaMTX.")
                 return True
+            elif response.status_code == 404:
+                logger.info(f"Stream {stream_name} did not exist on MediaMTX (404) during deregistration.")
+                return True
             else:
-                # If the path doesn't exist, count it as a success
-                if response.status_code == 404:
-                    return True
-                logger.error(f"Failed to remove stream {stream_name} from MediaMTX: {response.text}")
+                logger.error(f"MediaMTX API Error: DELETE {url} failed with status {response.status_code}. Response: {response.text}")
                 return False
         except requests.exceptions.RequestException as e:
-            logger.error(f"Error connecting to MediaMTX API to delete path: {e}")
+            logger.error(f"MediaMTX API Request Exception: DELETE {url} - Timeout: {timeout}s - Error: {e}")
             return False
 
     @classmethod

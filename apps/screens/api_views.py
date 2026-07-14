@@ -17,7 +17,7 @@ def get_authenticated_agent(request):
             token = AgentToken.objects.select_related('computer__region').get(token=token_key)
             return token.computer
         except AgentToken.DoesNotExist:
-            pass
+            logger.warning(f"AgentToken authentication failed: Token '{token_key}' does not exist.")
     return None
 
 

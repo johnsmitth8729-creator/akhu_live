@@ -64,12 +64,22 @@ class HomeView(TemplateView):
         region_streams = {}
         
         request_host = self.request.get_host().split(':')[0]
+        request_scheme = 'https' if self.request.is_secure() else 'http'
+        is_prod = not getattr(settings, 'DEBUG', False)
         
         def get_dynamic_url(url_str):
             if not url_str:
                 return url_str
             if '127.0.0.1' in url_str or 'localhost' in url_str:
-                return url_str.replace('127.0.0.1', request_host).replace('localhost', request_host)
+                if is_prod:
+                    from urllib.parse import urlparse
+                    parsed = urlparse(url_str)
+                    path = parsed.path
+                    if not path.startswith('/'):
+                        path = '/' + path
+                    return f"{request_scheme}://{self.request.get_host()}{path}"
+                else:
+                    return url_str.replace('127.0.0.1', request_host).replace('localhost', request_host)
             return url_str
 
         db_settings = StreamingSetting.objects.first()
@@ -170,7 +180,7 @@ class AdminDashboardView(SuperAdminRequiredMixin, TemplateView):
         current_streams = online_cameras
         
         # Server health calculations
-        total, used, free = shutil.disk_usage("c:/")  # Windows main drive
+        total, used, free = shutil.disk_usage("/")  # Cross-platform root drive
         disk_used_percent = (used / total) * 100
         
         cpu_percent = 12.5
@@ -179,8 +189,8 @@ class AdminDashboardView(SuperAdminRequiredMixin, TemplateView):
             import psutil
             cpu_percent = psutil.cpu_percent(interval=None)
             mem_percent = psutil.virtual_memory().percent
-        except ImportError:
-            pass
+        except ImportError as e:
+            logger.warning(f"psutil module not available, using mock hardware statistics: {e}")
 
         # Load from health checks cache
         from django.core.cache import cache

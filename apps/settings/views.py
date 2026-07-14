@@ -32,7 +32,8 @@ class SystemSettingUpdateView(SuperAdminRequiredMixin, View):
                     setting.save(update_fields=['value'])
                     updated_count += 1
             except SystemSetting.DoesNotExist:
-                pass
+                import logging
+                logging.getLogger(__name__).warning(f"Attempted to update non-existent SystemSetting key: '{key}'")
                 
         # Handle checkboxes that are unchecked (and thus missing from POST)
         boolean_settings = SystemSetting.objects.filter(value_type=SystemSetting.ValueTypes.BOOLEAN)

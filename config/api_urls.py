@@ -17,6 +17,7 @@ router.register('live-sources', sources_api.LiveSourceViewSet, basename='live-so
 router.register('recordings', sources_api.RecordingViewSet, basename='recordings')
 
 urlpatterns = [
+    path('health/', api_views.HealthCheckAPIView.as_view(), name='health'),
     path('auth/', api_views.AuthAPIView.as_view(), name='auth'),
     path('screens/register/', screens_api.AgentRegisterAPIView.as_view(), name='screens_register'),
     path('screens/heartbeat/', screens_api.AgentHeartbeatAPIView.as_view(), name='screens_heartbeat'),

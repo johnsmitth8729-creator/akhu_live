@@ -1,6 +1,6 @@
 {
-    "server_url": "http://192.168.1.231:8000",
-    "mediamtx_host": "192.168.1.231",
+    "server_url": "https://live.akhu.uz",
+    "mediamtx_host": "live.akhu.uz",
     "agent_id": "d681539c-3812-4865-855c-c6c3910e320d",
     "agent_secret_key": "1f06a7bb21468dd7c3d4bc87533e8ed7492146a9e162553d074347294cd8849b",
     "heartbeat_interval": 10,

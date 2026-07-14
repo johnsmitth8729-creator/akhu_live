@@ -1,0 +1,14 @@
+[Unit]
+Description=Gunicorn daemon for AKHU Live Monitoring System
+After=network.target postgresql.service redis-server.service
+
+[Service]
+User=boss
+Group=www-data
+WorkingDirectory=/home/boss/akhu_live
+ExecStart=/home/boss/akhu_live/venv/bin/gunicorn --workers 3 --bind 127.0.0.1:8000 config.wsgi:application --access-logfile /home/boss/akhu_live/gunicorn_access.log --error-logfile /home/boss/akhu_live/gunicorn_error.log
+Restart=always
+EnvironmentFile=/home/boss/akhu_live/.env
+
+[Install]
+WantedBy=multi-user.target

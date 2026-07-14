@@ -32,11 +32,18 @@ def register_rtsp_source_path(source):
         "source": rtsp_url,
         "sourceOnDemand": True
     }
+    timeout = 3
     try:
-        res = requests.post(url, json=payload, timeout=3)
-        return res.status_code in (200, 201)
-    except Exception as e:
-        logger.error(f"Error registering RTSP source on MediaMTX: {e}")
+        logger.info(f"Sending MediaMTX API Request: POST {url} - Timeout: {timeout}s - Payload: {payload}")
+        res = requests.post(url, json=payload, timeout=timeout)
+        logger.info(f"MediaMTX API Response: POST {url} - Status Code: {res.status_code} - Body: {res.text}")
+        if res.status_code in (200, 201):
+            return True
+        else:
+            logger.error(f"MediaMTX API Error: POST {url} failed with status {res.status_code}. Response: {res.text}")
+            return False
+    except requests.exceptions.RequestException as e:
+        logger.error(f"MediaMTX API Request Exception: POST {url} - Timeout: {timeout}s - Error: {e}")
         return False
 
 
@@ -44,11 +51,21 @@ def deregister_rtsp_source_path(source):
     stream_name = f"source_{source.id}"
     api_url = getattr(settings, 'MEDIAMTX_API_URL', 'http://127.0.0.1:9997')
     url = f"{api_url}/v3/config/paths/delete/{stream_name}"
+    timeout = 3
     try:
-        res = requests.post(url, timeout=3)
-        return res.status_code in (200, 204, 404)
-    except Exception as e:
-        logger.error(f"Error removing RTSP source path on MediaMTX: {e}")
+        logger.info(f"Sending MediaMTX API Request: DELETE {url} - Timeout: {timeout}s")
+        res = requests.delete(url, timeout=timeout)
+        logger.info(f"MediaMTX API Response: DELETE {url} - Status Code: {res.status_code} - Body: {res.text}")
+        if res.status_code in (200, 204):
+            return True
+        elif res.status_code == 404:
+            logger.info(f"Stream {stream_name} did not exist on MediaMTX (404) during deregistration.")
+            return True
+        else:
+            logger.error(f"MediaMTX API Error: DELETE {url} failed with status {res.status_code}. Response: {res.text}")
+            return False
+    except requests.exceptions.RequestException as e:
+        logger.error(f"MediaMTX API Request Exception: DELETE {url} - Timeout: {timeout}s - Error: {e}")
         return False
 
 

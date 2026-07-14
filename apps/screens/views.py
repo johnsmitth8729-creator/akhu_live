@@ -53,14 +53,18 @@ class ComputerDiagnosticsAPIView(ComputerQuerysetMixin, View):
         reg_time = registration_log.created_at.strftime('%Y-%m-%d %H:%M:%S') if registration_log else "Never"
         
         # 3. MediaMTX active path info
-        api_url = getattr(settings, 'MEDIAMTX_API_URL', 'http://192.168.1.231:9997')
+        api_url = getattr(settings, 'MEDIAMTX_API_URL', 'http://127.0.0.1:9997')
         mediamtx_online = False
         publishing_active = False
         publisher_details = None
         reader_count = 0
         
+        timeout = 1.5
+        url = f"{api_url}/v3/paths/list"
         try:
-            res = requests.get(f"{api_url}/v3/paths/list", timeout=1.5)
+            logger.info(f"Sending MediaMTX API Request: GET {url} - Timeout: {timeout}s")
+            res = requests.get(url, timeout=timeout)
+            logger.info(f"MediaMTX API Response: GET {url} - Status Code: {res.status_code} - Body snippet: {res.text[:300]}")
             if res.status_code == 200:
                 mediamtx_online = True
                 items = res.json().get('items', {})
@@ -69,8 +73,10 @@ class ComputerDiagnosticsAPIView(ComputerQuerysetMixin, View):
                     publishing_active = path_data.get('source') is not None
                     reader_count = len(path_data.get('readers', []))
                     publisher_details = path_data.get('source')
-        except Exception as e:
-            pass
+            else:
+                logger.warning(f"MediaMTX API GET {url} returned non-200 status: {res.status_code}")
+        except requests.exceptions.RequestException as e:
+            logger.error(f"MediaMTX API Request Exception: GET {url} - Timeout: {timeout}s - Error: {e}")
             
         # 4. FFmpeg diagnostics from cache
         cache_data = cache.get(f"ffmpeg_diagnostics_{computer.id}", {})

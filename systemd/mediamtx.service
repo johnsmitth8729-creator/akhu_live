@@ -1,0 +1,13 @@
+[Unit]
+Description=MediaMTX Media Server
+After=network.target
+
+[Service]
+Type=simple
+User=boss
+WorkingDirectory=/home/boss/akhu_live
+ExecStart=/opt/mediamtx/mediamtx /opt/mediamtx/mediamtx.yml
+Restart=always
+
+[Install]
+WantedBy=multi-user.target

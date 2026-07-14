@@ -136,3 +136,40 @@ class ActivityLogViewSet(viewsets.ReadOnlyModelViewSet):
         if user.is_super_admin():
             return ActivityLog.objects.all()
         return ActivityLog.objects.none()
+
+
+class HealthCheckAPIView(APIView):
+    """
+    Lightweight health check endpoint returning system status.
+    """
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request):
+        from django.db import connection
+        from django.core.cache import cache
+        
+        status_data = {
+            "status": "healthy",
+            "database": "online",
+            "cache": "online"
+        }
+        
+        # Check DB
+        try:
+            connection.ensure_connection()
+        except Exception:
+            status_data["database"] = "offline"
+            status_data["status"] = "unhealthy"
+
+        # Check Cache (Redis)
+        try:
+            cache.set("__health_check_ping__", "pong", timeout=5)
+            if cache.get("__health_check_ping__") != "pong":
+                status_data["cache"] = "offline"
+                status_data["status"] = "unhealthy"
+        except Exception:
+            status_data["cache"] = "offline"
+            status_data["status"] = "unhealthy"
+
+        response_status = status.HTTP_200_OK if status_data["status"] == "healthy" else status.HTTP_503_SERVICE_UNAVAILABLE
+        return Response(status_data, status=response_status)
