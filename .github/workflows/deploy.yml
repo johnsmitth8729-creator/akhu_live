@@ -43,11 +43,8 @@ jobs:
           echo "Checking project..."
           python manage.py check
 
-          echo "Restarting Gunicorn..."
-          sudo systemctl restart akhu_live
-
-          echo "Restarting Celery Worker and Beat..."
-          sudo systemctl restart akhu_celery
-          sudo systemctl restart akhu_celerybeat
+          echo "Restarting services..."
+          chmod +x restart_services.sh
+          sudo ./restart_services.sh
 
           echo "Deployment completed successfully."
