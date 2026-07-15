@@ -207,7 +207,7 @@ webrtcLocalUDPAddress: :8189
 webrtcLocalTCPAddress: ""
 webrtcIPsFromInterfaces: true
 webrtcIPsFromInterfacesList: []
-webrtcAdditionalHosts: []
+webrtcAdditionalHosts: [live.akhu.uz]
 
 # Dynamic ICE servers configuration for public routing
 webrtcICEServers2:

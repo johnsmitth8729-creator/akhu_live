@@ -70,7 +70,11 @@ class HomeView(TemplateView):
         def get_dynamic_url(url_str):
             if not url_str:
                 return url_str
-            if is_prod:
+            # Check if accessed via domain or over secure HTTPS connection
+            is_domain = not request_host.replace('.', '').isdigit() and request_host != 'localhost'
+            use_proxy_path = self.request.is_secure() or is_prod or is_domain
+            
+            if use_proxy_path:
                 prefix = ''
                 if ':8889' in url_str:
                     prefix = '/webrtc'
