@@ -337,6 +337,24 @@
         }
     }
 
+    function resolveDynamicUrl(urlStr) {
+        if (!urlStr) return urlStr;
+        const isProd = window.location.protocol === 'https:' || !['localhost', '127.0.0.1'].includes(window.location.hostname);
+        if (isProd) {
+            const origin = window.location.origin;
+            if (urlStr.includes(':8889')) {
+                const path = urlStr.split(':8889')[1];
+                return `${origin}/webrtc${path}`;
+            } else if (urlStr.includes(':8888')) {
+                const path = urlStr.split(':8888')[1];
+                return `${origin}/hls${path}`;
+            }
+        } else {
+            return urlStr.replace('127.0.0.1', window.location.hostname).replace('localhost', window.location.hostname);
+        }
+        return urlStr;
+    }
+
     const activePlayers = {};
 
     document.addEventListener("DOMContentLoaded", () => {
@@ -344,8 +362,8 @@
             {% if c.status == 'online' %}
                 activePlayers[{{ c.id }}] = new StreamPlayer(
                     {{ c.id }}, 
-                    "{{ c.stream_urls.whep }}", 
-                    "{{ c.stream_urls.hls }}"
+                    resolveDynamicUrl("{{ c.stream_urls.whep }}"), 
+                    resolveDynamicUrl("{{ c.stream_urls.hls }}")
                 );
                 activePlayers[{{ c.id }}].start();
             {% else %}
