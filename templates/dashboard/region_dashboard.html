@@ -181,21 +181,51 @@
         }
 
         async connectWebRTC() {
-            this.peerConnection = new RTCPeerConnection({
-                iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
+            const iceServers = [];
+            const stunUrls = "{{ stun_url }}".split(",").map(url => url.trim());
+            stunUrls.forEach(url => { if (url) iceServers.push({ urls: url }); });
+            const turnUrls = "{{ turn_url }}".split(",").map(url => url.trim());
+            turnUrls.forEach(url => { 
+                if (url) {
+                    iceServers.push({ 
+                        urls: url,
+                        username: 'username',
+                        credential: 'password'
+                    }); 
+                }
             });
+
+            this.fallbackTriggered = false;
+            this.peerConnection = new RTCPeerConnection({ iceServers: iceServers });
+
+            this.connectionTimeout = setTimeout(() => {
+                if (this.peerConnection && this.peerConnection.connectionState !== 'connected') {
+                    console.warn(`[WHEP ${this.cameraId}] WebRTC connection state did not reach connected in 5 seconds. Triggering fallback.`);
+                    this.triggerHlsFallback("ICE negotiation timeout");
+                }
+            }, 5000);
 
             this.peerConnection.ontrack = (event) => {
                 this.videoEl.srcObject = event.streams[0];
                 this.showLoading(false);
+                if (this.connectionTimeout) {
+                    clearTimeout(this.connectionTimeout);
+                    this.connectionTimeout = null;
+                }
                 this.isConnected = true;
                 this.reconnectAttempts = 0;
             };
 
             this.peerConnection.onconnectionstatechange = () => {
                 const state = this.peerConnection.connectionState;
-                if (state === 'failed' || state === 'disconnected') {
-                    this.handleReconnect();
+                if (state === 'connected') {
+                    if (this.connectionTimeout) {
+                        clearTimeout(this.connectionTimeout);
+                        this.connectionTimeout = null;
+                    }
+                    this.isConnected = true;
+                } else if (state === 'failed' || state === 'disconnected') {
+                    this.triggerHlsFallback("PeerConnection state " + state);
                 }
             };
 
@@ -210,7 +240,7 @@
                 body: offer.sdp
             });
 
-            if (response.status === 200) {
+            if (response.status === 200 || response.status === 201) {
                 const answerSdp = await response.text();
                 await this.peerConnection.setRemoteDescription(new RTCSessionDescription({
                     type: 'answer',
@@ -219,6 +249,24 @@
             } else {
                 throw new Error("WHEP error");
             }
+        }
+
+        triggerHlsFallback(reason) {
+            if (this.fallbackTriggered) return;
+            this.fallbackTriggered = true;
+            console.warn(`[WHEP ${this.cameraId}] Triggering HLS fallback: ${reason}`);
+            
+            if (this.connectionTimeout) {
+                clearTimeout(this.connectionTimeout);
+                this.connectionTimeout = null;
+            }
+
+            if (this.peerConnection) {
+                try { this.peerConnection.close(); } catch(e) {}
+                this.peerConnection = null;
+            }
+
+            this.connectHLS();
         }
 
         connectHLS() {
@@ -233,7 +281,23 @@
                     this.isConnected = true;
                 });
                 this.hlsPlayer.on(Hls.Events.ERROR, (event, data) => {
-                    if (data.fatal) this.handleReconnect();
+                    if (data.fatal) {
+                        if (data.type === Hls.ErrorTypes.NETWORK_ERROR) {
+                            console.warn(`[HLS ${this.cameraId}] Network error, retrying in 2 seconds...`);
+                            setTimeout(() => {
+                                if (this.hlsPlayer) {
+                                    this.hlsPlayer.loadSource(this.hlsUrl);
+                                    this.hlsPlayer.startLoad();
+                                }
+                            }, 2000);
+                        } else if (data.type === Hls.ErrorTypes.MEDIA_ERROR) {
+                            console.warn(`[HLS ${this.cameraId}] Media error, trying to recover...`);
+                            this.hlsPlayer.recoverMediaError();
+                        } else {
+                            console.error(`[HLS ${this.cameraId}] Unrecoverable error:`, data);
+                            this.handleReconnect();
+                        }
+                    }
                 });
             } else if (this.videoEl.canPlayType('application/vnd.apple.mpegurl')) {
                 this.videoEl.src = this.hlsUrl;
