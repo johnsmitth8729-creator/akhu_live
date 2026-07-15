@@ -193,14 +193,31 @@
     const isRecordingActive = {};
     const publisherReconnectTimers = {};
     const whepRetryCounts = {};
+    const activeHlsPlayers = {};
 
     function resolveLocation(baseUrl, locationHeader) {
         if (!locationHeader) return null;
         if (locationHeader.startsWith('http://') || locationHeader.startsWith('https://')) {
+            const urlObj = new URL(locationHeader);
+            const baseObj = new URL(baseUrl);
+            if (urlObj.origin === baseObj.origin) {
+                if (baseUrl.includes('/webrtc/') && !urlObj.pathname.startsWith('/webrtc/')) {
+                    return `${baseObj.origin}/webrtc${urlObj.pathname}${urlObj.search}`;
+                }
+                if (baseUrl.includes('/hls/') && !urlObj.pathname.startsWith('/hls/')) {
+                    return `${baseObj.origin}/hls${urlObj.pathname}${urlObj.search}`;
+                }
+            }
             return locationHeader;
         }
         if (locationHeader.startsWith('/')) {
             const urlObj = new URL(baseUrl);
+            if (baseUrl.includes('/webrtc/') && !locationHeader.startsWith('/webrtc/')) {
+                return `${urlObj.origin}/webrtc${locationHeader}`;
+            }
+            if (baseUrl.includes('/hls/') && !locationHeader.startsWith('/hls/')) {
+                return `${urlObj.origin}/hls${locationHeader}`;
+            }
             return `${urlObj.origin}${locationHeader}`;
         }
         return `${baseUrl}/${locationHeader}`;
@@ -288,6 +305,12 @@
             console.log(`[Source ${sourceId}] Sending DELETE to WHEP session:`, url);
             fetch(url, { method: 'DELETE' }).catch(err => console.warn("Failed to delete viewer session:", err));
             delete viewerSessionUrls[sourceId];
+        }
+
+        if (activeHlsPlayers[sourceId]) {
+            console.log(`[Source ${sourceId}] Destroying Hls.js player.`);
+            try { activeHlsPlayers[sourceId].destroy(); } catch(e) {}
+            delete activeHlsPlayers[sourceId];
         }
 
         const video = document.getElementById(`playback-video-${sourceId}`);
@@ -536,6 +559,20 @@
                 
                 console.log(`[Source ${sourceId}] Adding tracks to publisher PeerConnection...`);
                 stream.getTracks().forEach(track => pc.addTrack(track, stream));
+
+                // Prefer H.264 for the video transceiver to ensure cross-device and Safari/iOS compatibility
+                try {
+                    const videoTransceiver = pc.getTransceivers().find(t => t.sender.track && t.sender.track.kind === 'video');
+                    if (videoTransceiver && RTCRtpSender.getCapabilities) {
+                        const capabilities = RTCRtpSender.getCapabilities('video');
+                        const h264Codecs = capabilities.codecs.filter(codec => codec.mimeType.toLowerCase() === 'video/h264');
+                        const otherCodecs = capabilities.codecs.filter(codec => codec.mimeType.toLowerCase() !== 'video/h264');
+                        videoTransceiver.setCodecPreferences([...h264Codecs, ...otherCodecs]);
+                        console.log(`[Source ${sourceId}] Successfully set H.264 codec preference.`);
+                    }
+                } catch(codecErr) {
+                    console.warn(`[Source ${sourceId}] Could not set H.264 codec preferences:`, codecErr);
+                }
 
                 pc.onconnectionstatechange = () => {
                     const state = pc.connectionState;
@@ -854,10 +891,16 @@
         console.log(`[Source ${sourceId}] playWebRTC initiated to:`, whepUrl);
         const video = document.getElementById(`playback-video-${sourceId}`);
         let fallbackTriggered = false;
+        let connectionTimeout = null;
 
         const triggerHlsFallback = (reason) => {
             if (fallbackTriggered) return;
             
+            if (connectionTimeout) {
+                clearTimeout(connectionTimeout);
+                connectionTimeout = null;
+            }
+
             whepRetryCounts[sourceId] = (whepRetryCounts[sourceId] || 0) + 1;
             console.warn(`[Source ${sourceId}] WHEP connection attempt failed: ${reason}. Retry count: ${whepRetryCounts[sourceId]}/3`);
 
@@ -894,6 +937,14 @@
             const pc = new RTCPeerConnection({ iceServers: iceServers });
             viewerPeerConnections[sourceId] = pc;
 
+            // Connection timeout helper: if not connected in 5 seconds, fallback to HLS
+            connectionTimeout = setTimeout(() => {
+                if (pc.connectionState !== 'connected') {
+                    console.warn(`[Source ${sourceId}] WebRTC connection state did not reach connected in 5 seconds (current: ${pc.connectionState}). Triggering fallback.`);
+                    triggerHlsFallback("ICE negotiation timeout");
+                }
+            }, 5000);
+
             console.log(`[Source ${sourceId}] Adding recvonly transceivers...`);
             pc.addTransceiver('video', { direction: 'recvonly' });
             pc.addTransceiver('audio', { direction: 'recvonly' });
@@ -914,6 +965,10 @@
                 
                 video.play().then(() => {
                     console.log(`[Source ${sourceId}] Playback started successfully.`);
+                    if (connectionTimeout) {
+                        clearTimeout(connectionTimeout);
+                        connectionTimeout = null;
+                    }
                     whepRetryCounts[sourceId] = 0; // Reset retry counter on successful playback
                     setSourceState(sourceId, 'VIEWING');
                 }).catch(err => {
@@ -924,7 +979,14 @@
             pc.onconnectionstatechange = () => {
                 const state = pc.connectionState;
                 console.log(`[Source ${sourceId}] Subscriber PeerConnection state:`, state);
-                if (state === 'failed' || state === 'disconnected') {
+                if (state === 'connected') {
+                    if (connectionTimeout) {
+                        clearTimeout(connectionTimeout);
+                        connectionTimeout = null;
+                    }
+                    whepRetryCounts[sourceId] = 0;
+                    setSourceState(sourceId, 'VIEWING');
+                } else if (state === 'failed' || state === 'disconnected') {
                     triggerHlsFallback("PeerConnection state " + state);
                 }
             };
@@ -991,6 +1053,7 @@
         if (Hls.isSupported()) {
             console.log(`[Source ${sourceId}] Hls.js is supported. Initializing player...`);
             const hls = new Hls({ maxMaxBufferLength: 5 });
+            activeHlsPlayers[sourceId] = hls; // Store player instance globally for cleanup
             hls.loadSource(hlsUrl);
             hls.attachMedia(video);
             hls.on(Hls.Events.MANIFEST_PARSED, () => {
