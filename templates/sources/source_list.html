@@ -54,7 +54,10 @@
             <div class="card shadow-sm h-100 border-0 bg-dark text-white source-card overflow-hidden">
                 <!-- Video Container -->
                 <div class="video-container position-relative bg-black" style="height: 220px;">
-                    <video id="preview-video-{{ s.id }}" autoplay muted playsinline class="w-100 h-100"></video>
+                    <!-- Local Preview Video (for webcam/screen capture) -->
+                    <video id="local-preview-video-{{ s.id }}" autoplay muted playsinline class="w-100 h-100" style="display: {% if s.source_type == 'IP_CAMERA' %}none{% else %}block{% endif %};"></video>
+                    <!-- Playback Video (for WHEP/HLS stream watching) -->
+                    <video id="playback-video-{{ s.id }}" autoplay muted playsinline class="w-100 h-100" style="display: {% if s.source_type == 'IP_CAMERA' %}block{% else %}none{% endif %};"></video>
                     
                     <!-- Status Overlays -->
                     <div class="position-absolute top-2 start-2 bg-dark bg-opacity-75 px-2 py-1 rounded small text-white d-flex align-items-center gap-1.5">
@@ -188,6 +191,8 @@
     const isStreamingActive = {};
     const isDeviceActive = {};
     const isRecordingActive = {};
+    const publisherReconnectTimers = {};
+    const whepRetryCounts = {};
 
     function resolveLocation(baseUrl, locationHeader) {
         if (!locationHeader) return null;
@@ -232,19 +237,30 @@
         });
     }
 
-    function stopAllLocalMedia(sourceId) {
-        console.log(`[Source ${sourceId}] stopAllLocalMedia called.`);
-        if (localStreams[sourceId]) {
-            localStreams[sourceId].getTracks().forEach(track => {
-                track.stop();
-                console.log(`[Source ${sourceId}] Local track stopped:`, track.kind);
-            });
-            delete localStreams[sourceId];
+    const sourceStates = {}; // 'IDLE', 'PREVIEW', 'PUBLISHING', 'VIEWING', 'RECORDING'
+
+    function setSourceState(sourceId, state) {
+        console.log(`[Source ${sourceId}] State transition: ${sourceStates[sourceId] || 'IDLE'} -> ${state}`);
+        sourceStates[sourceId] = state;
+    }
+
+    function switchVideoElement(sourceId, showPlayback) {
+        const local = document.getElementById(`local-preview-video-${sourceId}`);
+        const playback = document.getElementById(`playback-video-${sourceId}`);
+        if (showPlayback) {
+            if (local) local.style.display = 'none';
+            if (playback) playback.style.display = 'block';
+        } else {
+            if (local) local.style.display = 'block';
+            if (playback) playback.style.display = 'none';
         }
-        
+    }
+
+    function stopPublisher(sourceId) {
+        console.log(`[Source ${sourceId}] stopPublisher called.`);
         if (publisherPeerConnections[sourceId]) {
             console.log(`[Source ${sourceId}] Closing publisher PeerConnection.`);
-            publisherPeerConnections[sourceId].close();
+            try { publisherPeerConnections[sourceId].close(); } catch(e) {}
             delete publisherPeerConnections[sourceId];
         }
         if (publisherSessionUrls[sourceId]) {
@@ -253,10 +269,18 @@
             fetch(url, { method: 'DELETE' }).catch(err => console.warn("Failed to delete publisher session:", err));
             delete publisherSessionUrls[sourceId];
         }
+        isStreamingActive[sourceId] = false;
 
+        if (sourceStates[sourceId] === 'PUBLISHING') {
+            setSourceState(sourceId, 'PREVIEW');
+        }
+    }
+
+    function stopViewer(sourceId) {
+        console.log(`[Source ${sourceId}] stopViewer called.`);
         if (viewerPeerConnections[sourceId]) {
             console.log(`[Source ${sourceId}] Closing viewer PeerConnection.`);
-            viewerPeerConnections[sourceId].close();
+            try { viewerPeerConnections[sourceId].close(); } catch(e) {}
             delete viewerPeerConnections[sourceId];
         }
         if (viewerSessionUrls[sourceId]) {
@@ -266,6 +290,38 @@
             delete viewerSessionUrls[sourceId];
         }
 
+        const video = document.getElementById(`playback-video-${sourceId}`);
+        if (video) {
+            video.srcObject = null;
+            video.src = '';
+        }
+
+        switchVideoElement(sourceId, false);
+        setSourceState(sourceId, 'IDLE');
+    }
+
+    function stopLocalPreview(sourceId) {
+        console.log(`[Source ${sourceId}] stopLocalPreview called.`);
+        if (localStreams[sourceId]) {
+            localStreams[sourceId].getTracks().forEach(track => {
+                try { track.stop(); } catch(e) {}
+                console.log(`[Source ${sourceId}] Local track stopped:`, track.kind);
+            });
+            delete localStreams[sourceId];
+        }
+
+        const video = document.getElementById(`local-preview-video-${sourceId}`);
+        if (video) {
+            video.srcObject = null;
+            video.src = '';
+        }
+
+        isDeviceActive[sourceId] = false;
+        setSourceState(sourceId, 'IDLE');
+    }
+
+    function stopRecording(sourceId) {
+        console.log(`[Source ${sourceId}] stopRecording called.`);
         if (mediaRecorders[sourceId] && mediaRecorders[sourceId].state !== 'inactive') {
             try { mediaRecorders[sourceId].stop(); } catch(e) {}
             delete mediaRecorders[sourceId];
@@ -274,26 +330,26 @@
             clearInterval(recordingTimers[sourceId]);
             delete recordingTimers[sourceId];
         }
-        
-        const video = document.getElementById(`preview-video-${sourceId}`);
-        if (video) {
-            video.srcObject = null;
-            video.src = '';
-        }
-        
+
         const recTag = document.getElementById(`rec-tag-${sourceId}`);
         if (recTag) recTag.style.display = 'none';
-        
+
         const timerText = document.getElementById(`rec-timer-${sourceId}`);
         if (timerText) timerText.innerText = "00:00:00";
-        
-        isDeviceActive[sourceId] = false;
-        isStreamingActive[sourceId] = false;
+
         isRecordingActive[sourceId] = false;
     }
 
+    function stopAllSourceResources(sourceId) {
+        console.log(`[Source ${sourceId}] stopAllSourceResources called.`);
+        stopRecording(sourceId);
+        stopPublisher(sourceId);
+        stopViewer(sourceId);
+        stopLocalPreview(sourceId);
+    }
+
     async function toggleDeviceCapture(sourceId, sourceType) {
-        const video = document.getElementById(`preview-video-${sourceId}`);
+        const video = document.getElementById(`local-preview-video-${sourceId}`);
         const captureBtn = document.getElementById(`btn-device-capture-${sourceId}`);
         const streamBtn = document.getElementById(`btn-stream-toggle-${sourceId}`);
 
@@ -372,6 +428,7 @@
                 video.play();
                 
                 isDeviceActive[sourceId] = true;
+                setSourceState(sourceId, 'PREVIEW');
                 captureBtn.innerHTML = `<i class="fa-solid fa-stop me-1"></i> {% translate 'Stop Preview' %}`;
                 captureBtn.className = 'btn btn-danger btn-sm flex-grow-1';
                 streamBtn.disabled = false;
@@ -380,7 +437,9 @@
                 alert("{% translate 'Failed to acquire media device.' %}");
             }
         } else {
-            stopAllLocalMedia(sourceId);
+            stopRecording(sourceId);
+            stopPublisher(sourceId);
+            stopLocalPreview(sourceId);
             captureBtn.innerHTML = `<i class="fa-solid fa-play me-1"></i> {% translate 'Preview' %}`;
             captureBtn.className = 'btn btn-outline-light btn-sm flex-grow-1';
             streamBtn.disabled = true;
@@ -427,7 +486,7 @@
                     // Bind toggle state
                     streamBtn.setAttribute('onclick', `toggleRTSPStreaming(${sourceId}, '${data.source_status}')`);
                 } else {
-                    stopAllLocalMedia(sourceId);
+                    stopViewer(sourceId);
                     streamBtn.innerHTML = `<i class="fa-solid fa-tower-broadcast me-1"></i> {% translate 'Start RTSP' %}`;
                     streamBtn.className = 'btn btn-success btn-sm flex-grow-1';
                     streamBtn.setAttribute('onclick', `toggleRTSPStreaming(${sourceId}, '${data.source_status}')`);
@@ -481,24 +540,58 @@
                 pc.onconnectionstatechange = () => {
                     const state = pc.connectionState;
                     console.log(`[Source ${sourceId}] Publisher PeerConnection state:`, state);
-                    if (state === 'failed' || state === 'closed') {
-                        console.warn(`[Source ${sourceId}] Publisher connection failed or closed.`);
-                        // Only trigger cleanup if it is currently marked as active
+                    
+                    if (state === 'connected') {
+                        if (publisherReconnectTimers[sourceId]) {
+                            console.log(`[Source ${sourceId}] Publisher connection recovered. Clearing reconnect timer.`);
+                            clearTimeout(publisherReconnectTimers[sourceId]);
+                            delete publisherReconnectTimers[sourceId];
+                        }
+                    } else if (state === 'failed' || state === 'disconnected') {
+                        console.warn(`[Source ${sourceId}] Publisher connection failed/disconnected. Starting 8-second reconnect timer.`);
+                        if (isStreamingActive[sourceId] && !publisherReconnectTimers[sourceId]) {
+                            publisherReconnectTimers[sourceId] = setTimeout(() => {
+                                console.warn(`[Source ${sourceId}] Publisher reconnect timer expired. Stopping publisher.`);
+                                stopPublisher(sourceId);
+                                
+                                const btn = document.getElementById(`btn-stream-toggle-${sourceId}`);
+                                if (btn) {
+                                    btn.innerHTML = `<i class="fa-solid fa-tower-broadcast me-1"></i> {% translate 'Start Stream' %}`;
+                                    btn.className = 'btn btn-success btn-sm flex-grow-1';
+                                    btn.disabled = false;
+                                }
+
+                                const badge = document.getElementById(`badge-status-${sourceId}`);
+                                if (badge) {
+                                    badge.innerText = 'offline';
+                                    badge.className = 'badge bg-secondary px-2 py-0.5 text-uppercase';
+                                }
+                                const indicator = document.getElementById(`indicator-${sourceId}`);
+                                if (indicator) {
+                                    indicator.className = 'indicator-pulse bg-secondary';
+                                }
+
+                                fetch('/api/stop-stream/', {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json', 'X-CSRFToken': '{{ csrf_token }}' },
+                                    body: JSON.stringify({ source_id: sourceId })
+                                }).catch(() => {});
+                                delete publisherReconnectTimers[sourceId];
+                            }, 8000);
+                        }
+                    } else if (state === 'closed') {
+                        if (publisherReconnectTimers[sourceId]) {
+                            clearTimeout(publisherReconnectTimers[sourceId]);
+                            delete publisherReconnectTimers[sourceId];
+                        }
                         if (isStreamingActive[sourceId]) {
-                            isStreamingActive[sourceId] = false;
-                            stopAllLocalMedia(sourceId);
+                            stopPublisher(sourceId);
                             
                             const btn = document.getElementById(`btn-stream-toggle-${sourceId}`);
                             if (btn) {
                                 btn.innerHTML = `<i class="fa-solid fa-tower-broadcast me-1"></i> {% translate 'Start Stream' %}`;
                                 btn.className = 'btn btn-success btn-sm flex-grow-1';
-                                btn.disabled = true; 
-                            }
-                            
-                            const captureBtn = document.getElementById(`btn-device-capture-${sourceId}`);
-                            if (captureBtn) {
-                                captureBtn.innerHTML = `<i class="fa-solid fa-play me-1"></i> {% translate 'Preview' %}`;
-                                captureBtn.className = 'btn btn-outline-light btn-sm flex-grow-1';
+                                btn.disabled = false;
                             }
 
                             const badge = document.getElementById(`badge-status-${sourceId}`);
@@ -576,6 +669,7 @@
                     }
                     
                     isStreamingActive[sourceId] = true;
+                    setSourceState(sourceId, 'PUBLISHING');
                     streamBtn.innerHTML = `<i class="fa-solid fa-stop me-1"></i> {% translate 'Stop Stream' %}`;
                     streamBtn.className = 'btn btn-danger btn-sm flex-grow-1';
                     streamBtn.disabled = false; // re-enable button as "Stop Stream"
@@ -632,17 +726,11 @@
                 console.error(`[Source ${sourceId}] Error registering stop-stream:`, err);
             }
 
-            stopAllLocalMedia(sourceId);
+            stopPublisher(sourceId);
             
             streamBtn.innerHTML = `<i class="fa-solid fa-tower-broadcast me-1"></i> {% translate 'Start Stream' %}`;
             streamBtn.className = 'btn btn-success btn-sm flex-grow-1';
-            
-            const captureBtn = document.getElementById(`btn-device-capture-${sourceId}`);
-            if (captureBtn) {
-                captureBtn.innerHTML = `<i class="fa-solid fa-play me-1"></i> {% translate 'Preview' %}`;
-                captureBtn.className = 'btn btn-outline-light btn-sm flex-grow-1';
-            }
-            streamBtn.disabled = true;
+            streamBtn.disabled = false; // Keep it enabled because preview is still running!
 
             const badge = document.getElementById(`badge-status-${sourceId}`);
             badge.innerText = 'offline';
@@ -750,7 +838,6 @@
     }
 
     function playMediaMTXFeed(sourceId) {
-        const video = document.getElementById(`preview-video-${sourceId}`);
         const hlsBase = "{{ mediamtx_hls_url }}";
         const webrtcBase = "{{ mediamtx_webrtc_url }}";
         const streamName = `source_${sourceId}`;
@@ -758,30 +845,44 @@
         const whepUrl = `${webrtcBase}/${streamName}/whep`;
         const hlsUrl = `${hlsBase}/${streamName}/index.m3u8`;
 
-        console.log(`[Source ${sourceId}] playMediaMTXFeed called. Attempting WebRTC play...`);
+        console.log(`[Source ${sourceId}] playMediaMTXFeed called. Switching to playback element.`);
+        switchVideoElement(sourceId, true);
         playWebRTC(sourceId, whepUrl, hlsUrl);
     }
 
     async function playWebRTC(sourceId, whepUrl, hlsUrl) {
         console.log(`[Source ${sourceId}] playWebRTC initiated to:`, whepUrl);
-        const video = document.getElementById(`preview-video-${sourceId}`);
+        const video = document.getElementById(`playback-video-${sourceId}`);
         let fallbackTriggered = false;
 
         const triggerHlsFallback = (reason) => {
             if (fallbackTriggered) return;
-            fallbackTriggered = true;
-            console.warn(`[Source ${sourceId}] WebRTC playback failed (${reason}). Falling back to HLS at:`, hlsUrl);
             
+            whepRetryCounts[sourceId] = (whepRetryCounts[sourceId] || 0) + 1;
+            console.warn(`[Source ${sourceId}] WHEP connection attempt failed: ${reason}. Retry count: ${whepRetryCounts[sourceId]}/3`);
+
             if (viewerPeerConnections[sourceId]) {
-                viewerPeerConnections[sourceId].close();
+                try { viewerPeerConnections[sourceId].close(); } catch(e) {}
                 delete viewerPeerConnections[sourceId];
             }
             if (viewerSessionUrls[sourceId]) {
                 fetch(viewerSessionUrls[sourceId], { method: 'DELETE' }).catch(() => {});
                 delete viewerSessionUrls[sourceId];
             }
-            
-            playHLS(sourceId, hlsUrl);
+
+            if (whepRetryCounts[sourceId] < 3) {
+                // Retry WebRTC play in 2 seconds
+                setTimeout(() => {
+                    if (sourceStates[sourceId] !== 'VIEWING' && !isDeviceActive[sourceId]) {
+                        playWebRTC(sourceId, whepUrl, hlsUrl);
+                    }
+                }, 2000);
+            } else {
+                fallbackTriggered = true;
+                whepRetryCounts[sourceId] = 0; // reset retry counter
+                console.warn(`[Source ${sourceId}] WHEP exceeded max retries. Falling back to HLS at:`, hlsUrl);
+                playHLS(sourceId, hlsUrl);
+            }
         };
 
         try {
@@ -813,6 +914,8 @@
                 
                 video.play().then(() => {
                     console.log(`[Source ${sourceId}] Playback started successfully.`);
+                    whepRetryCounts[sourceId] = 0; // Reset retry counter on successful playback
+                    setSourceState(sourceId, 'VIEWING');
                 }).catch(err => {
                     console.error(`[Source ${sourceId}] Video play failed:`, err);
                 });
@@ -821,16 +924,16 @@
             pc.onconnectionstatechange = () => {
                 const state = pc.connectionState;
                 console.log(`[Source ${sourceId}] Subscriber PeerConnection state:`, state);
-                if (state === 'failed') {
-                    triggerHlsFallback("PeerConnection state failed");
+                if (state === 'failed' || state === 'disconnected') {
+                    triggerHlsFallback("PeerConnection state " + state);
                 }
             };
 
             pc.oniceconnectionstatechange = () => {
                 const state = pc.iceConnectionState;
                 console.log(`[Source ${sourceId}] Subscriber ICE connection state:`, state);
-                if (state === 'failed') {
-                    triggerHlsFallback("ICE connection state failed");
+                if (state === 'failed' || state === 'disconnected') {
+                    triggerHlsFallback("ICE connection state " + state);
                 }
             };
 
@@ -884,7 +987,7 @@
 
     function playHLS(sourceId, hlsUrl) {
         console.log(`[Source ${sourceId}] playHLS called with URL:`, hlsUrl);
-        const video = document.getElementById(`preview-video-${sourceId}`);
+        const video = document.getElementById(`playback-video-${sourceId}`);
         if (Hls.isSupported()) {
             console.log(`[Source ${sourceId}] Hls.js is supported. Initializing player...`);
             const hls = new Hls({ maxMaxBufferLength: 5 });
@@ -892,7 +995,9 @@
             hls.attachMedia(video);
             hls.on(Hls.Events.MANIFEST_PARSED, () => {
                 console.log(`[Source ${sourceId}] HLS manifest parsed. Starting playback.`);
-                video.play().catch(e => console.error(`[Source ${sourceId}] HLS play failed:`, e));
+                video.play().then(() => {
+                    setSourceState(sourceId, 'VIEWING');
+                }).catch(e => console.error(`[Source ${sourceId}] HLS play failed:`, e));
             });
             hls.on(Hls.Events.ERROR, (event, data) => {
                 if (data.fatal) {
@@ -903,7 +1008,9 @@
             console.log(`[Source ${sourceId}] Native HLS supported. Loading URL...`);
             video.src = hlsUrl;
             video.addEventListener('loadedmetadata', () => {
-                video.play().catch(e => console.error(`[Source ${sourceId}] Native HLS play failed:`, e));
+                video.play().then(() => {
+                    setSourceState(sourceId, 'VIEWING');
+                }).catch(e => console.error(`[Source ${sourceId}] Native HLS play failed:`, e));
             });
         } else {
             console.error(`[Source ${sourceId}] Neither Hls.js nor native HLS is supported by this browser.`);
@@ -922,7 +1029,7 @@
     }
 
     function toggleAudioMute(sourceId) {
-        const video = document.getElementById(`preview-video-${sourceId}`);
+        const video = document.getElementById(localStreams[sourceId] ? `local-preview-video-${sourceId}` : `playback-video-${sourceId}`);
         const muteBtn = document.getElementById(`btn-mute-${sourceId}`);
         const stream = localStreams[sourceId];
         
@@ -937,7 +1044,7 @@
                     `<i class="fa-solid fa-microphone-slash"></i>`;
                 muteBtn.className = !isEnabled ? 'btn btn-dark btn-sm bg-opacity-75 border-0 p-1 px-2 text-success' : 'btn btn-dark btn-sm bg-opacity-75 border-0 p-1 px-2';
             }
-        } else {
+        } else if (video) {
             video.muted = !video.muted;
             muteBtn.innerHTML = !video.muted ? 
                 `<i class="fa-solid fa-volume-high"></i>` : 
@@ -946,13 +1053,65 @@
     }
 
     function togglePreviewFullscreen(sourceId) {
-        const video = document.getElementById(`preview-video-${sourceId}`);
+        const video = document.getElementById(localStreams[sourceId] ? `local-preview-video-${sourceId}` : `playback-video-${sourceId}`);
+        if (!video) return;
         if (video.requestFullscreen) {
             video.requestFullscreen();
         } else if (video.webkitRequestFullscreen) {
             video.webkitRequestFullscreen();
         } else if (video.msRequestFullscreen) {
             video.msRequestFullscreen();
+        }
+    }
+
+    let statusPollInterval = null;
+
+    async function pollLiveSourceStatuses() {
+        try {
+            const res = await fetch('/api/live-sources/');
+            if (!res.ok) return;
+            const sources = await res.json();
+            
+            sources.forEach(source => {
+                const sourceId = source.id;
+                const newStatus = source.status; // 'online', 'recording', 'offline'
+                
+                // Update status badge UI dynamically
+                const badge = document.getElementById(`badge-status-${sourceId}`);
+                const indicator = document.getElementById(`indicator-${sourceId}`);
+                if (badge && indicator) {
+                    let badgeText = newStatus;
+                    {% if not request.user.is_staff %}
+                    if (newStatus === 'recording' || newStatus === 'online') {
+                        badgeText = 'live';
+                    }
+                    {% endif %}
+                    badge.innerText = badgeText.toUpperCase();
+                    
+                    const isLive = newStatus === 'online' || newStatus === 'recording';
+                    const isRecording = newStatus === 'recording';
+                    
+                    badge.className = `badge ${isLive ? (isRecording ? 'bg-danger' : 'bg-success') : 'bg-secondary'} px-2 py-0.5 text-uppercase`;
+                    indicator.className = `indicator-pulse ${isLive ? (isRecording ? 'bg-danger' : 'bg-success') : 'bg-secondary'}`;
+                }
+                
+                // Viewer Auto-Subscription Logic (if we are NOT the local publisher)
+                if (!isDeviceActive[sourceId]) {
+                    if (newStatus === 'online' || newStatus === 'recording') {
+                        if (sourceStates[sourceId] !== 'VIEWING') {
+                            console.log(`[Source ${sourceId}] Poller detected stream went online. Auto-subscribing.`);
+                            playMediaMTXFeed(sourceId);
+                        }
+                    } else if (newStatus === 'offline' || newStatus === 'idle') {
+                        if (sourceStates[sourceId] === 'VIEWING') {
+                            console.log(`[Source ${sourceId}] Poller detected stream went offline. Cleaning up viewer.`);
+                            stopViewer(sourceId);
+                        }
+                    }
+                }
+            });
+        } catch(e) {
+            console.error("Failed to poll live source statuses:", e);
         }
     }
 
@@ -963,11 +1122,18 @@
                 playMediaMTXFeed('{{ s.id }}');
             {% endif %}
         {% endfor %}
+        
+        // Start status poller every 2 seconds
+        pollLiveSourceStatuses();
+        statusPollInterval = setInterval(pollLiveSourceStatuses, 2000);
     });
 
     window.addEventListener("beforeunload", () => {
+        if (statusPollInterval) {
+            clearInterval(statusPollInterval);
+        }
         // Clean up all active streams on exit
-        Object.keys(localStreams).forEach(id => stopAllLocalMedia(id));
+        Object.keys(localStreams).forEach(id => stopAllSourceResources(id));
     });
 </script>
 {% endblock %}
