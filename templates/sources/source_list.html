@@ -913,19 +913,10 @@
                 delete viewerSessionUrls[sourceId];
             }
 
-            if (whepRetryCounts[sourceId] < 3) {
-                // Retry WebRTC play in 2 seconds
-                setTimeout(() => {
-                    if (sourceStates[sourceId] !== 'VIEWING' && !isDeviceActive[sourceId]) {
-                        playWebRTC(sourceId, whepUrl, hlsUrl);
-                    }
-                }, 2000);
-            } else {
-                fallbackTriggered = true;
-                whepRetryCounts[sourceId] = 0; // reset retry counter
-                console.warn(`[Source ${sourceId}] WHEP exceeded max retries. Falling back to HLS at:`, hlsUrl);
-                playHLS(sourceId, hlsUrl);
-            }
+            fallbackTriggered = true;
+            whepRetryCounts[sourceId] = 0; // reset retry counter
+            console.warn(`[Source ${sourceId}] WebRTC failed. Falling back to HLS immediately at:`, hlsUrl);
+            playHLS(sourceId, hlsUrl);
         };
 
         try {
@@ -1064,7 +1055,22 @@
             });
             hls.on(Hls.Events.ERROR, (event, data) => {
                 if (data.fatal) {
-                    console.warn(`[Source ${sourceId}] Hls.js fatal error encountered:`, data.type);
+                    if (data.type === Hls.ErrorTypes.NETWORK_ERROR) {
+                        console.warn(`[Source ${sourceId}] HLS Network error, retrying in 2 seconds...`);
+                        setTimeout(() => {
+                            if (activeHlsPlayers[sourceId] === hls) {
+                                hls.loadSource(hlsUrl);
+                                hls.startLoad();
+                            }
+                        }, 2000);
+                    } else if (data.type === Hls.ErrorTypes.MEDIA_ERROR) {
+                        console.warn(`[Source ${sourceId}] HLS Media error, trying to recover...`);
+                        hls.recoverMediaError();
+                    } else {
+                        console.error(`[Source ${sourceId}] Unrecoverable HLS error:`, data);
+                        try { hls.destroy(); } catch(e) {}
+                        delete activeHlsPlayers[sourceId];
+                    }
                 }
             });
         } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
