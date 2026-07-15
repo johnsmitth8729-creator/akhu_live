@@ -36,17 +36,19 @@ class LiveSourceListView(SourceQuerysetMixin, ListView):
         def get_dynamic_url(url_str):
             if not url_str:
                 return url_str
-            if '127.0.0.1' in url_str or 'localhost' in url_str:
-                if is_prod:
-                    from urllib.parse import urlparse
-                    parsed = urlparse(url_str)
-                    path = parsed.path
-                    if not path.startswith('/'):
-                        path = '/' + path
-                    return f"{request_scheme}://{self.request.get_host()}{path}"
+            if is_prod:
+                prefix = ''
+                if ':8889' in url_str:
+                    prefix = '/webrtc'
+                elif ':8888' in url_str:
+                    prefix = '/hls'
                 else:
+                    return url_str
+                return f"{request_scheme}://{self.request.get_host()}{prefix}"
+            else:
+                if '127.0.0.1' in url_str or 'localhost' in url_str:
                     return url_str.replace('127.0.0.1', request_host).replace('localhost', request_host)
-            return url_str
+                return url_str
 
         db_settings = StreamingSetting.objects.first()
         if db_settings:
