@@ -13,6 +13,11 @@ restart_if_exists() {
     fi
 }
 
+if [ -d "/opt/mediamtx" ] && [ -f "/home/boss/akhu_live/mediamtx.yml" ]; then
+    echo "Updating MediaMTX configuration..."
+    cp /home/boss/akhu_live/mediamtx.yml /opt/mediamtx/mediamtx.yml
+fi
+
 restart_if_exists "akhu_live"
 restart_if_exists "mediamtx"
 restart_if_exists "akhu_celery"
