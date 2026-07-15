@@ -275,10 +275,13 @@
             const offer = await this.peerConnection.createOffer();
             await this.peerConnection.setLocalDescription(offer);
 
+            // Wait for ICE candidate gathering to complete so they are sent inside the offer SDP
+            await waitForIceGathering(this.peerConnection);
+
             const response = await fetch(this.whepUrl, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/sdp' },
-                body: offer.sdp
+                body: this.peerConnection.localDescription.sdp
             });
 
             if (response.status === 200 || response.status === 201) {
@@ -443,6 +446,37 @@
             this.videoEl.srcObject = null;
             this.videoEl.src = '';
         }
+    }
+
+    function waitForIceGathering(pc) {
+        return new Promise((resolve) => {
+            if (pc.iceGatheringState === 'complete') {
+                resolve();
+            } else {
+                function checkState() {
+                    if (pc.iceGatheringState === 'complete') {
+                        pc.removeEventListener('icecandidate', onIceCandidate);
+                        pc.removeEventListener('icegatheringstatechange', checkState);
+                        resolve();
+                    }
+                }
+                function onIceCandidate(event) {
+                    if (!event.candidate) {
+                        pc.removeEventListener('icecandidate', onIceCandidate);
+                        pc.removeEventListener('icegatheringstatechange', checkState);
+                        resolve();
+                    }
+                }
+                pc.addEventListener('icecandidate', onIceCandidate);
+                pc.addEventListener('icegatheringstatechange', checkState);
+                
+                setTimeout(() => {
+                    pc.removeEventListener('icecandidate', onIceCandidate);
+                    pc.removeEventListener('icegatheringstatechange', checkState);
+                    resolve();
+                }, 2000);
+            }
+        });
     }
 
     function resolveDynamicUrl(urlStr) {
