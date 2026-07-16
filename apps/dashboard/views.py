@@ -269,3 +269,59 @@ class RegionDashboardView(RegionAdminRequiredMixin, TemplateView):
         context['cameras'] = cameras
         
         return context
+
+
+from django.views import View
+from django.http import JsonResponse
+import requests
+
+class DVRListView(View):
+    """
+    Proxy to MediaMTX Playback List API.
+    Returns JSON list of recorded segments for the given stream_id.
+    """
+    def get(self, request, stream_id):
+        db_settings = StreamingSetting.objects.first()
+        playback_base = db_settings.mediamtx_playback_url if db_settings else "http://127.0.0.1:9996"
+        url = f"{playback_base}/list"
+        params = {"path": stream_id}
+        
+        if "start" in request.GET:
+            params["start"] = request.GET["start"]
+        if "end" in request.GET:
+            params["end"] = request.GET["end"]
+            
+        try:
+            resp = requests.get(url, params=params, timeout=5)
+            if resp.status_code == 200:
+                return JsonResponse(resp.json(), safe=False)
+            return JsonResponse([], safe=False)
+        except Exception as e:
+            return JsonResponse({"error": str(e)}, status=500)
+
+
+class DVRGetView(View):
+    """
+    Proxy/Redirect to MediaMTX Playback Get API.
+    Returns or redirects to the requested fmp4 video segment slice.
+    """
+    def get(self, request, stream_id):
+        start = request.GET.get('start', '')
+        duration = request.GET.get('duration', '600')  # Default 10 minutes
+        fmt = request.GET.get('format', 'fmp4')
+        
+        request_host = request.get_host().split(':')[0]
+        is_prod = not getattr(settings, 'DEBUG', False) or (not request_host.replace('.', '').isdigit() and request_host != 'localhost')
+        
+        if is_prod:
+            # Production: Use Nginx proxy path directly for high-performance direct file streaming
+            redirect_url = f"/playback/get?path={stream_id}&start={start}&duration={duration}&format={fmt}"
+        else:
+            db_settings = StreamingSetting.objects.first()
+            playback_base = db_settings.mediamtx_playback_url if db_settings else "http://127.0.0.1:9996"
+            if '127.0.0.1' in playback_base or 'localhost' in playback_base:
+                playback_base = playback_base.replace('127.0.0.1', request_host).replace('localhost', request_host)
+            redirect_url = f"{playback_base}/get?path={stream_id}&start={start}&duration={duration}&format={fmt}"
+            
+        return redirect(redirect_url)
+

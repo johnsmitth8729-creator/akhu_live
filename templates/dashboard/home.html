@@ -9,6 +9,7 @@
 {% block extra_head %}
 <!-- Include HLS.js for fallback HLS streaming -->
 <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+<link rel="stylesheet" href="{% static 'css/player.css' %}">
 <style>
     .filter-card {
         border-radius: 12px;
@@ -110,7 +111,7 @@
             <div class="row row-cols-1 row-cols-md-2 row-cols-lg-3 row-cols-xl-4 g-4 vms-grid-container">
                 {% for c in streams %}
                     <div class="col camera-card-col" id="col-camera-{{ c.unique_id }}">
-                        <div class="card video-card-vms shadow-sm h-100 border-0" id="card-camera-{{ c.unique_id }}">
+                        <div class="card video-card-vms shadow-sm h-100 border-0 cursor-pointer" id="card-camera-{{ c.unique_id }}" onclick="openPlayerModal('{{ c.unique_id }}', '{{ c.name }}', resolveDynamicUrl('{{ c.stream_urls.whep }}'), resolveDynamicUrl('{{ c.stream_urls.hls }}'))" style="cursor: pointer;">
                             <!-- Live Streaming Viewport -->
                             <div class="video-container">
                                 <video id="video-{{ c.unique_id }}" autoplay muted playsinline class="w-100 h-100 bg-black"></video>
@@ -142,11 +143,11 @@
                                 <!-- Hover VMS Controls overlay -->
                                 <div class="camera-controls">
                                     <!-- Snapshot -->
-                                    <button onclick="captureStreamSnapshot('{{ c.unique_id }}', '{{ c.name }}')" title="{% translate 'Take Snapshot' %}">
+                                    <button onclick="event.stopPropagation(); captureStreamSnapshot('{{ c.unique_id }}', '{{ c.name }}')" title="{% translate 'Take Snapshot' %}">
                                         <i class="fa-solid fa-camera"></i>
                                     </button>
                                     <!-- Fullscreen -->
-                                    <button onclick="toggleCardFullscreen('{{ c.unique_id }}')" title="{% translate 'Fullscreen View' %}">
+                                    <button onclick="event.stopPropagation(); toggleCardFullscreen('{{ c.unique_id }}')" title="{% translate 'Fullscreen View' %}">
                                         <i class="fa-solid fa-expand" id="fs-icon-{{ c.unique_id }}"></i>
                                     </button>
                                 </div>
@@ -176,7 +177,64 @@
         <i class="fa-solid fa-tower-broadcast text-muted display-4 mb-3"></i>
         <h5 class="text-muted">{% translate "No active exam streams found matching your criteria." %}</h5>
     </div>
-{% endif %}
+<!-- CCTV/VMS Player Modal -->
+<div class="modal fade vms-player-modal" id="vmsPlayerModal" tabindex="-1" aria-labelledby="vmsPlayerModalLabel" aria-hidden="true" data-bs-backdrop="static">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header d-flex align-items-center justify-content-between">
+                <div class="d-flex align-items-center gap-3">
+                    <span id="playerStatusBadge" class="vms-player-status-badge status-live">
+                        <span class="badge-dot"></span>
+                        <span id="playerStatusText">LIVE</span>
+                    </span>
+                    <h5 class="modal-title fw-bold m-0" id="vmsPlayerModalLabel">{% translate "Camera Stream" %}</h5>
+                </div>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close" onclick="closePlayerModal()"></button>
+            </div>
+            
+            <div class="modal-body p-0">
+                <!-- Dual Engine Viewports Wrapper -->
+                <div class="vms-video-viewport" id="vmsVideoViewport">
+                    <!-- Engine 1: LIVE (WebRTC WHEP / Fallback HLS) -->
+                    <div class="vms-engine engine-active" id="liveEngine">
+                        <video id="playerLiveVideo" controls autoplay muted playsinline class="w-100 h-100 bg-black"></video>
+                    </div>
+                    <!-- Engine 2: DVR (HLS / fmp4 playbacks) -->
+                    <div class="vms-engine" id="dvrEngine">
+                        <video id="playerDvrVideo" controls playsinline class="w-100 h-100 bg-black"></video>
+                    </div>
+                </div>
+                
+                <!-- DVR Timeline Controls Section -->
+                <div class="vms-dvr-bar px-4 py-3">
+                    <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+                        <!-- Time Quick Shifts -->
+                        <div class="dvr-quick-shifts m-0" id="dvrQuickShifts">
+                            <button class="dvr-quick-btn active" id="btnShiftLive" onclick="switchToLive()">LIVE</button>
+                            <button class="dvr-quick-btn" onclick="shiftDVR(5)">-5 sec</button>
+                            <button class="dvr-quick-btn" onclick="shiftDVR(20)">-20 sec</button>
+                            <button class="dvr-quick-btn" onclick="shiftDVR(60)">-1 min</button>
+                            <button class="dvr-quick-btn" onclick="shiftDVR(180)">-3 min</button>
+                            <button class="dvr-quick-btn" onclick="shiftDVR(600)">-10 min</button>
+                        </div>
+                        
+                        <!-- Go Live Action Button -->
+                        <button class="btn-go-live" id="btnGoLive" onclick="switchToLive()" disabled>
+                            <i class="fa-solid fa-play"></i> Go Live
+                        </button>
+                    </div>
+                    
+                    <!-- Scrub/Timeline Slider -->
+                    <div class="dvr-timeline-wrapper">
+                        <input type="range" class="dvr-slider" id="dvrTimelineSlider" min="-600" max="0" value="0" oninput="onTimelineSliderInput(this.value)" onchange="onTimelineSliderChange(this.value)">
+                        <span class="dvr-time-display" id="dvrTimeDisplay">LIVE</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
 {% endblock %}
 
 {% block extra_js %}
@@ -276,10 +334,8 @@
             const offer = await this.peerConnection.createOffer();
             await this.peerConnection.setLocalDescription(offer);
 
-            // Wait for ICE candidate gathering to complete so they are sent inside the offer SDP
             await waitForIceGathering(this.peerConnection);
 
-            // Filter SDP offer to keep only TCP candidates
             const sdpOffer = this.peerConnection.localDescription.sdp;
             const filteredOffer = sdpOffer.split(/\r?\n/).map(line => {
                 if (line.startsWith('a=candidate:') && !line.toLowerCase().includes('tcp')) {
@@ -296,7 +352,6 @@
 
             if (response.status === 200 || response.status === 201) {
                 const answerSdp = await response.text();
-                // Filter SDP answer to keep only TCP candidates
                 const filteredAnswer = answerSdp.split(/\r?\n/).map(line => {
                     if (line.startsWith('a=candidate:') && !line.toLowerCase().includes('tcp')) {
                         return null;
@@ -462,11 +517,9 @@
                 console.log(`[StreamPlayer ${this.cameraId}] WebRTC failed. Trying HLS fallback...`);
                 this.connectHLS();
             } else {
-                // Both WebRTC and HLS failed completely
                 this.lastFailureTime = Date.now();
                 console.warn(`[StreamPlayer ${this.cameraId}] Stream is offline on MediaMTX (404). Stopping retries.`);
                 
-                // Update UI elements to Offline
                 const indicator = document.getElementById(`indicator-${this.cameraId}`);
                 const badgeText = document.getElementById(`badge-status-text-${this.cameraId}`);
                 const qualityEl = document.getElementById(`quality-${this.cameraId}`);
@@ -550,51 +603,442 @@
         return urlStr;
     }
 
-    const activePlayers = {};
-
-    document.addEventListener("DOMContentLoaded", () => {
-        // Start streaming players
-        {% for region, streams in region_streams.items %}
-            {% for c in streams %}
-                {% if c.is_online %}
-                    activePlayers["{{ c.unique_id }}"] = new StreamPlayer(
-                        "{{ c.unique_id }}", 
-                        resolveDynamicUrl("{{ c.stream_urls.whep }}"), 
-                        resolveDynamicUrl("{{ c.stream_urls.hls }}")
-                    );
-                    activePlayers["{{ c.unique_id }}"].start();
-                {% endif %}
-            {% endfor %}
-        {% endfor %}
-
-        // Background Check Statuses via AJAX
-        setInterval(checkStatusesAsync, 15000);
-    });
-
-    // Capture screenshot on client canvas
-    function captureStreamSnapshot(streamId, name) {
-        const video = document.getElementById(`video-${streamId}`);
-        if (!video || !video.videoWidth) {
-            alert("{% translate 'Snapshot failed: Video stream not active.' %}");
-            return;
+    // Modal Live Engine Component
+    class LiveEngine {
+        constructor(videoEl, whepUrl, hlsUrl) {
+            this.videoEl = videoEl;
+            this.whepUrl = whepUrl;
+            this.hlsUrl = hlsUrl;
+            this.peerConnection = null;
+            this.hlsPlayer = null;
+            this.fallbackTriggered = false;
         }
 
-        const canvas = document.createElement('canvas');
-        canvas.width = video.videoWidth;
-        canvas.height = video.videoHeight;
-        const ctx = canvas.getContext('2d');
-        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-        
-        ctx.fillStyle = "rgba(15, 23, 42, 0.6)";
-        ctx.fillRect(0, canvas.height - 40, canvas.width, 40);
-        ctx.fillStyle = "#ffffff";
-        ctx.font = "bold 13px Inter, sans-serif";
-        ctx.fillText(`${name} | ${new Date().toLocaleString()}`, 20, canvas.height - 15);
+        async start() {
+            this.stop();
+            try {
+                await this.connectWebRTC();
+            } catch (err) {
+                console.warn("Live WebRTC connection failed, trying HLS...", err);
+                this.connectHLS();
+            }
+        }
 
-        const link = document.createElement('a');
-        link.download = `${name.replace(/\s+/g, '_')}_Snapshot.png`;
-        link.href = canvas.toDataURL("image/png");
-        link.click();
+        async connectWebRTC() {
+            const iceServers = [];
+            let stunUrlsRaw = "{{ stun_url }}".trim();
+            if (!stunUrlsRaw) {
+                stunUrlsRaw = "stun:stun.l.google.com:19302,stun:stun1.l.google.com:19302";
+            }
+            const stunUrls = stunUrlsRaw.split(",").map(url => url.trim());
+            stunUrls.forEach(url => { if (url) iceServers.push({ urls: url }); });
+            const turnUrls = "{{ turn_url }}".split(",").map(url => url.trim());
+            turnUrls.forEach(url => { 
+                if (url) {
+                    iceServers.push({ 
+                        urls: url,
+                        username: 'username',
+                        credential: 'password'
+                    }); 
+                }
+            });
+
+            this.fallbackTriggered = false;
+            this.peerConnection = new RTCPeerConnection({ iceServers: iceServers });
+
+            this.connectionTimeout = setTimeout(() => {
+                if (this.peerConnection && this.peerConnection.connectionState !== 'connected') {
+                    console.warn("Live WebRTC negotiation timeout. Triggering fallback.");
+                    this.triggerHlsFallback();
+                }
+            }, 5000);
+
+            this.peerConnection.ontrack = (event) => {
+                this.videoEl.srcObject = event.streams[0];
+                this.videoEl.play().catch(() => {});
+                if (this.connectionTimeout) {
+                    clearTimeout(this.connectionTimeout);
+                    this.connectionTimeout = null;
+                }
+            };
+
+            this.peerConnection.onconnectionstatechange = () => {
+                const state = this.peerConnection.connectionState;
+                if (state === 'failed' || state === 'disconnected') {
+                    this.triggerHlsFallback();
+                }
+            };
+
+            this.peerConnection.addTransceiver('video', { direction: 'recvonly' });
+            this.peerConnection.addTransceiver('audio', { direction: 'recvonly' });
+
+            const offer = await this.peerConnection.createOffer();
+            await this.peerConnection.setLocalDescription(offer);
+
+            await waitForIceGathering(this.peerConnection);
+
+            const sdpOffer = this.peerConnection.localDescription.sdp;
+            const filteredOffer = sdpOffer.split(/\r?\n/).map(line => {
+                if (line.startsWith('a=candidate:') && !line.toLowerCase().includes('tcp')) {
+                    return null;
+                }
+                return line;
+            }).filter(line => line !== null).join('\r\n');
+
+            const response = await fetch(this.whepUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/sdp' },
+                body: filteredOffer
+            });
+
+            if (response.status === 200 || response.status === 201) {
+                const answerSdp = await response.text();
+                const filteredAnswer = answerSdp.split(/\r?\n/).map(line => {
+                    if (line.startsWith('a=candidate:') && !line.toLowerCase().includes('tcp')) {
+                        return null;
+                    }
+                    return line;
+                }).filter(line => line !== null).join('\r\n');
+
+                await this.peerConnection.setRemoteDescription(new RTCSessionDescription({
+                    type: 'answer',
+                    sdp: filteredAnswer
+                }));
+            } else {
+                throw new Error(`WHEP error: HTTP ${response.status}`);
+            }
+        }
+
+        triggerHlsFallback() {
+            if (this.fallbackTriggered) return;
+            this.fallbackTriggered = true;
+            this.stopWebRTC();
+            this.connectHLS();
+        }
+
+        connectHLS() {
+            if (Hls.isSupported()) {
+                this.hlsPlayer = new Hls({ maxMaxBufferLength: 5 });
+                this.hlsPlayer.loadSource(this.hlsUrl);
+                this.hlsPlayer.attachMedia(this.videoEl);
+                this.hlsPlayer.on(Hls.Events.MANIFEST_PARSED, () => {
+                    this.videoEl.play().catch(() => {});
+                });
+            } else if (this.videoEl.canPlayType('application/vnd.apple.mpegurl')) {
+                this.videoEl.src = this.hlsUrl;
+                this.videoEl.addEventListener('loadedmetadata', () => {
+                    this.videoEl.play().catch(() => {});
+                });
+            }
+        }
+
+        stopWebRTC() {
+            if (this.connectionTimeout) {
+                clearTimeout(this.connectionTimeout);
+                this.connectionTimeout = null;
+            }
+            if (this.peerConnection) {
+                try { this.peerConnection.close(); } catch(e) {}
+                this.peerConnection = null;
+            }
+        }
+
+        stop() {
+            this.stopWebRTC();
+            if (this.hlsPlayer) {
+                try { this.hlsPlayer.destroy(); } catch(e) {}
+                this.hlsPlayer = null;
+            }
+            this.videoEl.srcObject = null;
+            this.videoEl.src = '';
+            this.videoEl.load();
+        }
+    }
+
+    // Modal DVR Engine Component
+    class DVREngine {
+        constructor(videoEl, streamId) {
+            this.videoEl = videoEl;
+            this.streamId = streamId;
+        }
+
+        loadOffset(offsetSeconds) {
+            this.stop();
+            const nowMs = Date.now();
+            const targetMs = nowMs - (Math.abs(offsetSeconds) * 1000);
+            const targetIso = new Date(targetMs).toISOString();
+
+            this.videoEl.src = `/api/dvr/${this.streamId}/get/?start=${encodeURIComponent(targetIso)}&duration=600&format=fmp4`;
+            this.videoEl.load();
+            this.videoEl.play().catch(e => {
+                console.warn("DVR Playback failed or was paused by user:", e);
+            });
+        }
+
+        stop() {
+            this.videoEl.pause();
+            this.videoEl.removeAttribute('src');
+            this.videoEl.load();
+        }
+    }
+
+    // Fullscreen and Orientation Manager
+    class FullscreenManager {
+        static request(container, videoEl) {
+            const requestFS = container.requestFullscreen
+                || container.webkitRequestFullscreen
+                || container.mozRequestFullScreen
+                || container.msRequestFullscreen;
+
+            if (requestFS) {
+                requestFS.call(container).then(() => {
+                    this.lockOrientation();
+                }).catch(err => {
+                    console.warn("Fullscreen request failed, applying fallback styling:", err);
+                    container.classList.add('fullscreen-active');
+                });
+            } else if (typeof videoEl.webkitEnterFullscreen === 'function') {
+                try {
+                    videoEl.webkitEnterFullscreen();
+                } catch(e) {
+                    console.warn("Native iOS fullscreen call failed:", e);
+                }
+            } else {
+                container.classList.add('fullscreen-active');
+            }
+        }
+
+        static exit(container) {
+            const exitFS = document.exitFullscreen
+                || document.webkitExitFullscreen
+                || document.mozCancelFullScreen
+                || document.msExitFullscreen;
+
+            if (exitFS) {
+                exitFS.call(document).then(() => {
+                    this.unlockOrientation();
+                }).catch(() => {});
+            }
+            container.classList.remove('fullscreen-active');
+        }
+
+        static lockOrientation() {
+            if (screen.orientation && typeof screen.orientation.lock === 'function') {
+                screen.orientation.lock('landscape').catch(err => {
+                    console.warn("Orientation lock rejected:", err);
+                });
+            }
+        }
+
+        static unlockOrientation() {
+            if (screen.orientation && typeof screen.orientation.unlock === 'function') {
+                try { screen.orientation.unlock(); } catch(e) {}
+            }
+        }
+    }
+
+    // Main Modal Video Player Orchestrator
+    class VideoPlayer {
+        constructor() {
+            this.streamId = null;
+            this.name = "";
+            this.mode = 'live';
+            this.liveEngine = null;
+            this.dvrEngine = null;
+            
+            this.modalEl = document.getElementById('vmsPlayerModal');
+            this.bootstrapModal = null;
+            this.liveVideo = document.getElementById('playerLiveVideo');
+            this.dvrVideo = document.getElementById('playerDvrVideo');
+            this.liveEngineContainer = document.getElementById('liveEngine');
+            this.dvrEngineContainer = document.getElementById('dvrEngine');
+            
+            this.statusBadge = document.getElementById('playerStatusBadge');
+            this.statusText = document.getElementById('playerStatusText');
+            this.btnGoLive = document.getElementById('btnGoLive');
+            this.timelineSlider = document.getElementById('dvrTimelineSlider');
+            this.timeDisplay = document.getElementById('dvrTimeDisplay');
+            
+            this.initListeners();
+        }
+
+        initListeners() {
+            if (this.modalEl) {
+                this.modalEl.addEventListener('hidden.bs.modal', () => {
+                    this.destroy();
+                });
+            }
+
+            const fsChangeHandler = () => {
+                const container = document.getElementById('vmsVideoViewport');
+                const isFS = !!(
+                    document.fullscreenElement ||
+                    document.webkitFullscreenElement ||
+                    document.mozFullscreenElement ||
+                    document.msFullscreenElement ||
+                    (container && container.classList.contains('fullscreen-active'))
+                );
+                if (!isFS) {
+                    FullscreenManager.unlockOrientation();
+                }
+            };
+            document.addEventListener('fullscreenchange', fsChangeHandler);
+            document.addEventListener('webkitfullscreenchange', fsChangeHandler);
+        }
+
+        open(streamId, name, whepUrl, hlsUrl) {
+            this.streamId = streamId;
+            this.name = name;
+            this.mode = 'live';
+
+            const titleEl = document.getElementById('vmsPlayerModalLabel');
+            if (titleEl) titleEl.innerText = name;
+
+            this.timelineSlider.value = 0;
+            this.timeDisplay.innerText = "LIVE";
+            this.btnGoLive.disabled = true;
+            
+            this.statusBadge.className = "vms-player-status-badge status-live";
+            this.statusText.innerText = "LIVE";
+
+            this.liveEngineContainer.classList.add('engine-active');
+            this.dvrEngineContainer.classList.remove('engine-active');
+
+            this.liveEngine = new LiveEngine(this.liveVideo, whepUrl, hlsUrl);
+            this.liveEngine.start();
+
+            this.dvrEngine = new DVREngine(this.dvrVideo, streamId);
+
+            if (!this.bootstrapModal) {
+                this.bootstrapModal = new bootstrap.Modal(this.modalEl);
+            }
+            this.bootstrapModal.show();
+        }
+
+        shiftDVR(offsetSeconds) {
+            if (!this.streamId) return;
+            this.mode = 'dvr';
+
+            if (this.liveEngine) {
+                this.liveEngine.stop();
+            }
+
+            this.liveEngineContainer.classList.remove('engine-active');
+            this.dvrEngineContainer.classList.add('engine-active');
+
+            this.dvrEngine.loadOffset(offsetSeconds);
+
+            this.timelineSlider.value = -Math.abs(offsetSeconds);
+            this.updateTimeDisplay(-Math.abs(offsetSeconds));
+            this.btnGoLive.disabled = false;
+
+            this.statusBadge.className = "vms-player-status-badge status-dvr";
+            this.statusText.innerText = `-${this.formatTimeLabel(offsetSeconds)}`;
+
+            document.querySelectorAll('.dvr-quick-shifts .dvr-quick-btn').forEach(btn => {
+                btn.classList.remove('active');
+            });
+        }
+
+        switchToLive() {
+            if (!this.streamId) return;
+            this.mode = 'live';
+
+            if (this.dvrEngine) {
+                this.dvrEngine.stop();
+            }
+
+            this.dvrEngineContainer.classList.remove('engine-active');
+            this.liveEngineContainer.classList.add('engine-active');
+
+            if (this.liveEngine) {
+                this.liveEngine.start();
+            }
+
+            this.timelineSlider.value = 0;
+            this.timeDisplay.innerText = "LIVE";
+            this.btnGoLive.disabled = true;
+
+            this.statusBadge.className = "vms-player-status-badge status-live";
+            this.statusText.innerText = "LIVE";
+
+            document.querySelectorAll('.dvr-quick-shifts .dvr-quick-btn').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            document.getElementById('btnShiftLive').classList.add('active');
+        }
+
+        updateTimeDisplay(offsetSeconds) {
+            if (offsetSeconds === 0) {
+                this.timeDisplay.innerText = "LIVE";
+            } else {
+                this.timeDisplay.innerText = `-${this.formatTimeLabel(Math.abs(offsetSeconds))}`;
+            }
+        }
+
+        formatTimeLabel(seconds) {
+            if (seconds < 60) {
+                return `${seconds}s`;
+            } else {
+                const mins = Math.floor(seconds / 60);
+                return `${mins}m`;
+            }
+        }
+
+        destroy() {
+            if (this.liveEngine) {
+                this.liveEngine.stop();
+                this.liveEngine = null;
+            }
+            if (this.dvrEngine) {
+                this.dvrEngine.stop();
+                this.dvrEngine = null;
+            }
+            this.streamId = null;
+            this.bootstrapModal = null;
+        }
+    }
+
+    let globalVideoPlayer = null;
+
+    function openPlayerModal(streamId, name, whepUrl, hlsUrl) {
+        if (!globalVideoPlayer) {
+            globalVideoPlayer = new VideoPlayer();
+        }
+        globalVideoPlayer.open(streamId, name, whepUrl, hlsUrl);
+    }
+
+    function closePlayerModal() {
+        if (globalVideoPlayer) {
+            globalVideoPlayer.destroy();
+        }
+    }
+
+    function shiftDVR(seconds) {
+        if (globalVideoPlayer) {
+            globalVideoPlayer.shiftDVR(seconds);
+        }
+    }
+
+    function switchToLive() {
+        if (globalVideoPlayer) {
+            globalVideoPlayer.switchToLive();
+        }
+    }
+
+    function onTimelineSliderInput(val) {
+        if (globalVideoPlayer) {
+            globalVideoPlayer.updateTimeDisplay(parseInt(val));
+        }
+    }
+
+    function onTimelineSliderChange(val) {
+        const offset = parseInt(val);
+        if (offset === 0) {
+            switchToLive();
+        } else {
+            shiftDVR(Math.abs(offset));
+        }
     }
 
     // Toggle card fullscreen mode using native browser Fullscreen API

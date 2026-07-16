@@ -122,11 +122,17 @@ class StreamingSetting(models.Model):
     mediamtx_url = models.CharField(max_length=255, default='http://127.0.0.1:9997', verbose_name=_('MediaMTX API URL'))
     mediamtx_webrtc_url = models.CharField(max_length=255, default='http://127.0.0.1:8889', verbose_name=_('MediaMTX WebRTC URL'))
     mediamtx_hls_url = models.CharField(max_length=255, default='http://127.0.0.1:8888', verbose_name=_('MediaMTX HLS URL'))
+    mediamtx_playback_url = models.CharField(max_length=255, default='http://127.0.0.1:9996', verbose_name=_('MediaMTX Playback URL'))
     turn_url = models.CharField(max_length=255, default='turn:live.akhu.uz:3478?transport=udp', verbose_name=_('TURN Server URL'))
     stun_url = models.CharField(max_length=255, default='stun:stun.l.google.com:19302', verbose_name=_('STUN Server URL'))
     domain = models.CharField(max_length=100, default='live.akhu.uz', verbose_name=_('Production Domain'))
     https_enabled = models.BooleanField(default=True, verbose_name=_('HTTPS Enabled'))
     recording_enabled = models.BooleanField(default=True, verbose_name=_('Recording Enabled'))
+    dvr_buffer_minutes = models.IntegerField(
+        default=10,
+        verbose_name=_('DVR Buffer (minutes)'),
+        help_text=_('Rolling DVR buffer duration in minutes. Default: 10 min. Max: 30 min.')
+    )
 
     class Meta:
         verbose_name = _('Streaming Setting')
@@ -134,4 +140,5 @@ class StreamingSetting(models.Model):
 
     def __str__(self):
         return str(_("System Streaming Settings"))
+
 

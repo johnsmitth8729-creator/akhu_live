@@ -118,7 +118,7 @@ pprofTrustedProxies: []
 ###############################################
 # Global settings -> Playback server
 
-playback: false
+playback: true
 playbackAddress: :9996
 playbackEncryption: false
 playbackServerKey: server.key
@@ -255,13 +255,16 @@ pathDefaults:
   alwaysAvailableTracks: []
   alwaysAvailableFile: ""
 
-  record: false
+  # DVR rolling buffer recording
+  record: true
   recordPath: ./recordings/%path/%Y-%m-%d_%H-%M-%S-%f
   recordFormat: fmp4
   recordPartDuration: 1s
   recordMaxPartSize: 50M
-  recordSegmentDuration: 1h
-  recordDeleteAfter: 1d
+  # 1-minute segments for responsive DVR seek (small enough to be useful)
+  recordSegmentDuration: 1m
+  # Default 10-minute rolling buffer (configurable per deployment)
+  recordDeleteAfter: 10m
 
   overridePublisher: true
   srtPublishPassphrase:
