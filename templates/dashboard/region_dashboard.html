@@ -243,12 +243,12 @@
 
             // Filter SDP offer to keep only TCP candidates
             const sdpOffer = this.peerConnection.localDescription.sdp;
-            const filteredOffer = sdpOffer.split('\n').map(line => {
+            const filteredOffer = sdpOffer.split(/\r?\n/).map(line => {
                 if (line.startsWith('a=candidate:') && !line.toLowerCase().includes('tcp')) {
-                    return '';
+                    return null;
                 }
                 return line;
-            }).filter(Boolean).join('\n');
+            }).filter(line => line !== null).join('\r\n');
 
             const response = await fetch(this.whepUrl, {
                 method: 'POST',
@@ -259,12 +259,12 @@
             if (response.status === 200 || response.status === 201) {
                 const answerSdp = await response.text();
                 // Filter SDP answer to keep only TCP candidates
-                const filteredAnswer = answerSdp.split('\n').map(line => {
+                const filteredAnswer = answerSdp.split(/\r?\n/).map(line => {
                     if (line.startsWith('a=candidate:') && !line.toLowerCase().includes('tcp')) {
-                        return '';
+                        return null;
                     }
                     return line;
-                }).filter(Boolean).join('\n');
+                }).filter(line => line !== null).join('\r\n');
 
                 await this.peerConnection.setRemoteDescription(new RTCSessionDescription({
                     type: 'answer',
