@@ -377,42 +377,73 @@
         startStats() {
             if (this.statsInterval) clearInterval(this.statsInterval);
             this.statsInterval = setInterval(async () => {
-                if (!this.peerConnection || this.peerConnection.connectionState !== 'connected') return;
-                try {
-                    const stats = await this.peerConnection.getStats();
-                    let bytes = 0;
-                    let frames = 0;
-                    stats.forEach(report => {
-                        if (report.type === 'inbound-rtp' && report.kind === 'video') {
-                            bytes = report.bytesReceived;
-                            frames = report.framesDecoded;
-                        }
-                    });
-                    if (this.lastBytesReceived && this.lastTimestamp) {
-                        const duration = (Date.now() - this.lastTimestamp) / 1000;
-                        const bitrate = Math.round(((bytes - this.lastBytesReceived) * 8) / (1024 * duration));
-                        const fps = Math.round((frames - this.lastFramesDecoded) / duration);
+                const bitrateEl = document.getElementById(`bitrate-${this.cameraId}`);
+                const fpsEl = document.getElementById(`fps-${this.cameraId}`);
+                const qualityEl = document.getElementById(`quality-${this.cameraId}`);
 
-                        const bitrateEl = document.getElementById(`bitrate-${this.cameraId}`);
-                        const fpsEl = document.getElementById(`fps-${this.cameraId}`);
-                        const qualityEl = document.getElementById(`quality-${this.cameraId}`);
+                if (this.peerConnection && this.peerConnection.connectionState === 'connected') {
+                    try {
+                        const stats = await this.peerConnection.getStats();
+                        let bytes = 0;
+                        let frames = 0;
+                        stats.forEach(report => {
+                            if (report.type === 'inbound-rtp' && report.kind === 'video') {
+                                bytes = report.bytesReceived;
+                                frames = report.framesDecoded;
+                            }
+                        });
+                        if (this.lastBytesReceived && this.lastTimestamp) {
+                            const duration = (Date.now() - this.lastTimestamp) / 1000;
+                            const bitrate = Math.round(((bytes - this.lastBytesReceived) * 8) / (1024 * duration));
+                            const fps = Math.round((frames - this.lastFramesDecoded) / duration);
 
-                        if (bitrateEl) bitrateEl.innerText = bitrate + " Kbps";
-                        if (fpsEl) fpsEl.innerText = fps + " FPS";
-                        if (qualityEl) {
-                            if (bitrate > 800) {
-                                qualityEl.innerHTML = '<span class="badge bg-success-subtle text-success border border-success-subtle py-0.5 px-1.5" style="font-size: 0.6rem;"><i class="fa-solid fa-signal me-1"></i>Excellent</span>';
-                            } else if (bitrate > 200) {
-                                qualityEl.innerHTML = '<span class="badge bg-info-subtle text-info border border-info-subtle py-0.5 px-1.5" style="font-size: 0.6rem;"><i class="fa-solid fa-signal me-1"></i>Good</span>';
-                            } else {
-                                qualityEl.innerHTML = '<span class="badge bg-danger-subtle text-danger border border-danger-subtle py-0.5 px-1.5" style="font-size: 0.6rem;"><i class="fa-solid fa-signal me-1"></i>Poor</span>';
+                            if (bitrateEl) bitrateEl.innerText = bitrate + " Kbps";
+                            if (fpsEl) fpsEl.innerText = fps + " FPS";
+                            if (qualityEl) {
+                                if (bitrate > 800) {
+                                    qualityEl.innerHTML = '<span class="badge bg-success-subtle text-success border border-success-subtle py-0.5 px-1.5" style="font-size: 0.6rem;"><i class="fa-solid fa-signal me-1"></i>Excellent</span>';
+                                } else if (bitrate > 200) {
+                                    qualityEl.innerHTML = '<span class="badge bg-info-subtle text-info border border-info-subtle py-0.5 px-1.5" style="font-size: 0.6rem;"><i class="fa-solid fa-signal me-1"></i>Good</span>';
+                                } else {
+                                    qualityEl.innerHTML = '<span class="badge bg-danger-subtle text-danger border border-danger-subtle py-0.5 px-1.5" style="font-size: 0.6rem;"><i class="fa-solid fa-signal me-1"></i>Poor</span>';
+                                }
                             }
                         }
-                    }
-                    this.lastBytesReceived = bytes;
-                    this.lastFramesDecoded = frames;
-                    this.lastTimestamp = Date.now();
-                } catch(e) {}
+                        this.lastBytesReceived = bytes;
+                        this.lastFramesDecoded = frames;
+                        this.lastTimestamp = Date.now();
+                    } catch(e) {}
+                } else if (this.isConnected) {
+                    try {
+                        let fps = 0;
+                        if (this.videoEl.getVideoPlaybackQuality) {
+                            const quality = this.videoEl.getVideoPlaybackQuality();
+                            const frames = quality.totalVideoFrames;
+                            if (this.lastFramesDecoded && this.lastTimestamp) {
+                                const duration = (Date.now() - this.lastTimestamp) / 1000;
+                                fps = Math.round((frames - this.lastFramesDecoded) / duration);
+                            }
+                            this.lastFramesDecoded = frames;
+                        }
+                        this.lastTimestamp = Date.now();
+
+                        let bitrateStr = '0 Kbps';
+                        if (this.hlsPlayer && this.hlsPlayer.levels && this.hlsPlayer.currentLevel !== -1) {
+                            const level = this.hlsPlayer.levels[this.hlsPlayer.currentLevel];
+                            if (level && level.bitrate) {
+                                bitrateStr = Math.round(level.bitrate / 1000) + ' Kbps';
+                            }
+                        } else {
+                            bitrateStr = 'HLS Live';
+                        }
+
+                        if (fpsEl && fps > 0) fpsEl.innerText = fps + " FPS";
+                        if (bitrateEl) bitrateEl.innerText = bitrateStr;
+                        if (qualityEl) {
+                            qualityEl.innerHTML = '<span class="badge bg-success-subtle text-success border border-success-subtle py-0.5 px-1.5" style="font-size: 0.6rem;"><i class="fa-solid fa-signal me-1"></i>Excellent</span>';
+                        }
+                    } catch(e) {}
+                }
             }, 2000);
         }
 
