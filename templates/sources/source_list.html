@@ -19,6 +19,7 @@
         border-top-left-radius: 12px;
         border-top-right-radius: 12px;
         overflow: hidden;
+        transition: all 0.3s ease;
     }
     .indicator-pulse {
         width: 8px;
@@ -28,6 +29,36 @@
     }
     .bg-black {
         background-color: #000 !important;
+    }
+
+    /* Mobile Landscape Fullscreen camera style */
+    @media (max-width: 991px) and (orientation: landscape) {
+        .video-container.mobile-landscape-active {
+            position: fixed !important;
+            top: 0 !important;
+            left: 0 !important;
+            width: 100vw !important;
+            height: 100vh !important;
+            z-index: 999999 !important;
+            border-radius: 0 !important;
+            margin: 0 !important;
+        }
+        
+        .video-container.mobile-landscape-active video {
+            width: 100vw !important;
+            height: 100vh !important;
+            object-fit: cover !important;
+        }
+
+        .video-container.mobile-landscape-active .mobile-landscape-controls {
+            display: flex !important;
+            position: absolute !important;
+            bottom: 20px !important;
+            left: 50% !important;
+            transform: translateX(-50%) !important;
+            gap: 15px !important;
+            z-index: 1000000 !important;
+        }
     }
 </style>
 {% endblock %}
@@ -53,7 +84,7 @@
         <div class="col" id="col-source-{{ s.id }}">
             <div class="card shadow-sm h-100 border-0 bg-dark text-white source-card overflow-hidden">
                 <!-- Video Container -->
-                <div class="video-container position-relative bg-black" style="height: 220px;">
+                <div class="video-container position-relative bg-black" style="height: 220px;" id="video-container-{{ s.id }}">
                     <!-- Local Preview Video (for webcam/screen capture) -->
                     <video id="local-preview-video-{{ s.id }}" autoplay muted playsinline class="w-100 h-100" style="display: {% if s.source_type == 'IP_CAMERA' %}none{% else %}block{% endif %}; object-fit: contain;"></video>
                     <!-- Playback Video (for WHEP/HLS stream watching) -->
@@ -100,6 +131,21 @@
                         </button>
                         <button class="btn btn-dark btn-sm bg-opacity-75 border-0 p-1 px-2" style="font-size: 0.75rem;" onclick="togglePreviewFullscreen('{{ s.id }}')">
                             <i class="fa-solid fa-expand"></i>
+                        </button>
+                    </div>
+                    
+                    <!-- Mobile Landscape Overlay Controls (visible only in mobile landscape fullscreen) -->
+                    <div class="mobile-landscape-controls position-absolute d-none gap-3 z-3">
+                        <button class="btn btn-danger rounded-circle d-flex align-items-center justify-content-center shadow-lg" style="width: 50px; height: 50px;" onclick="toggleDeviceCapture('{{ s.id }}', '{{ s.source_type }}')" title="Stop Preview">
+                            <i class="fa-solid fa-stop"></i>
+                        </button>
+                        {% if s.source_type == 'WEBCAM' %}
+                            <button class="btn btn-info text-white rounded-circle d-flex align-items-center justify-content-center shadow-lg" style="width: 50px; height: 50px;" onclick="toggleCameraFacing('{{ s.id }}')" title="Switch Camera">
+                                <i class="fa-solid fa-camera-rotate"></i>
+                            </button>
+                        {% endif %}
+                        <button class="btn btn-success rounded-circle d-flex align-items-center justify-content-center shadow-lg" style="width: 50px; height: 50px;" id="btn-mobile-stream-{{ s.id }}" onclick="toggleWebRTCStreaming('{{ s.id }}', '{{ mediamtx_webrtc_url }}/source_{{ s.id }}/')" disabled title="Start Stream">
+                            <i class="fa-solid fa-tower-broadcast"></i>
                         </button>
                     </div>
                 </div>
@@ -208,8 +254,8 @@
     async function toggleCameraFacing(sourceId) {
         if (!isDeviceActive[sourceId]) return;
         
-        const currentFacing = cameraFacingModes[sourceId] || 'user';
-        const newFacing = currentFacing === 'user' ? 'environment' : 'user';
+        const currentFacing = cameraFacingModes[sourceId] || 'environment';
+        const newFacing = currentFacing === 'environment' ? 'user' : 'environment';
         cameraFacingModes[sourceId] = newFacing;
         
         console.log(`[Source ${sourceId}] Toggling camera facing to:`, newFacing);
@@ -391,6 +437,8 @@
         setSourceState(sourceId, 'IDLE');
         const flipBtn = document.getElementById(`btn-camera-flip-${sourceId}`);
         if (flipBtn) flipBtn.style.display = 'none';
+        const container = document.getElementById(`video-container-${sourceId}`);
+        if (container) container.classList.remove('mobile-landscape-active');
     }
 
     function stopRecording(sourceId) {
@@ -484,7 +532,7 @@
                 const audioConstraints = { echoCancellation: true, noiseSuppression: true };
                 
                  if (sourceType === 'WEBCAM') {
-                    const facing = cameraFacingModes[sourceId] || 'user';
+                    const facing = cameraFacingModes[sourceId] || 'environment';
                     stream = await navigator.mediaDevices.getUserMedia({ 
                         video: { 
                             width: { ideal: 1920 },
@@ -511,6 +559,12 @@
                 captureBtn.className = 'btn btn-danger btn-sm flex-grow-1';
                 streamBtn.disabled = false;
 
+                const container = document.getElementById(`video-container-${sourceId}`);
+                if (container) container.classList.add('mobile-landscape-active');
+
+                const mobileStreamBtn = document.getElementById(`btn-mobile-stream-${sourceId}`);
+                if (mobileStreamBtn) mobileStreamBtn.disabled = false;
+
                 const flipBtn = document.getElementById(`btn-camera-flip-${sourceId}`);
                 if (flipBtn && sourceType === 'WEBCAM') flipBtn.style.display = 'inline-block';
             } catch (err) {
@@ -524,6 +578,12 @@
             captureBtn.innerHTML = `<i class="fa-solid fa-play me-1"></i> {% translate 'Preview' %}`;
             captureBtn.className = 'btn btn-outline-light btn-sm flex-grow-1';
             streamBtn.disabled = true;
+
+            const container = document.getElementById(`video-container-${sourceId}`);
+            if (container) container.classList.remove('mobile-landscape-active');
+
+            const mobileStreamBtn = document.getElementById(`btn-mobile-stream-${sourceId}`);
+            if (mobileStreamBtn) mobileStreamBtn.disabled = true;
         }
     }
 
@@ -788,6 +848,13 @@
                     streamBtn.innerHTML = `<i class="fa-solid fa-stop me-1"></i> {% translate 'Stop Stream' %}`;
                     streamBtn.className = 'btn btn-danger btn-sm flex-grow-1';
                     streamBtn.disabled = false; // re-enable button as "Stop Stream"
+
+                    const mobileStreamBtnStart = document.getElementById(`btn-mobile-stream-${sourceId}`);
+                    if (mobileStreamBtnStart) {
+                        mobileStreamBtnStart.innerHTML = `<i class="fa-solid fa-stop"></i>`;
+                        mobileStreamBtnStart.className = 'btn btn-danger rounded-circle d-flex align-items-center justify-content-center shadow-lg';
+                        mobileStreamBtnStart.disabled = false;
+                    }
                     
                     const badge = document.getElementById(`badge-status-${sourceId}`);
                     {% if request.user.is_staff %}
@@ -846,6 +913,13 @@
             streamBtn.innerHTML = `<i class="fa-solid fa-tower-broadcast me-1"></i> {% translate 'Start Stream' %}`;
             streamBtn.className = 'btn btn-success btn-sm flex-grow-1';
             streamBtn.disabled = false; // Keep it enabled because preview is still running!
+
+            const mobileStreamBtnStop = document.getElementById(`btn-mobile-stream-${sourceId}`);
+            if (mobileStreamBtnStop) {
+                mobileStreamBtnStop.innerHTML = `<i class="fa-solid fa-tower-broadcast"></i>`;
+                mobileStreamBtnStop.className = 'btn btn-success rounded-circle d-flex align-items-center justify-content-center shadow-lg';
+                mobileStreamBtnStop.disabled = false;
+            }
 
             const badge = document.getElementById(`badge-status-${sourceId}`);
             badge.innerText = 'offline';
