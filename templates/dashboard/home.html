@@ -140,17 +140,7 @@
                                     </div>
                                 </div>
                                 
-                                <!-- Hover VMS Controls overlay -->
-                                <div class="camera-controls">
-                                    <!-- Snapshot -->
-                                    <button onclick="event.stopPropagation(); captureStreamSnapshot('{{ c.unique_id }}', '{{ c.name }}')" title="{% translate 'Take Snapshot' %}">
-                                        <i class="fa-solid fa-camera"></i>
-                                    </button>
-                                    <!-- Fullscreen -->
-                                    <button onclick="event.stopPropagation(); toggleCardFullscreen('{{ c.unique_id }}')" title="{% translate 'Fullscreen View' %}">
-                                        <i class="fa-solid fa-expand" id="fs-icon-{{ c.unique_id }}"></i>
-                                    </button>
-                                </div>
+
                             </div>
                             
                             <!-- Card Info Details -->
