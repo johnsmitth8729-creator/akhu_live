@@ -132,6 +132,15 @@
                                         onclick="toggleDeviceCapture('{{ s.id }}', '{{ s.source_type }}')">
                                     <i class="fa-solid fa-play me-1"></i> {% translate "Preview" %}
                                 </button>
+                                {% if s.source_type == 'WEBCAM' %}
+                                    <button class="btn btn-outline-info btn-sm px-2" 
+                                            id="btn-camera-flip-{{ s.id }}" 
+                                            onclick="toggleCameraFacing('{{ s.id }}')"
+                                            style="display: none;"
+                                            title="{% translate 'Switch Camera' %}">
+                                        <i class="fa-solid fa-camera-rotate"></i>
+                                    </button>
+                                {% endif %}
                                 <button class="btn btn-success btn-sm flex-grow-1" 
                                         id="btn-stream-toggle-{{ s.id }}" 
                                         onclick="toggleWebRTCStreaming('{{ s.id }}', '{{ mediamtx_webrtc_url }}/source_{{ s.id }}/')" 
@@ -194,6 +203,33 @@
     const publisherReconnectTimers = {};
     const whepRetryCounts = {};
     const activeHlsPlayers = {};
+    const cameraFacingModes = {};
+
+    async function toggleCameraFacing(sourceId) {
+        if (!isDeviceActive[sourceId]) return;
+        
+        const currentFacing = cameraFacingModes[sourceId] || 'user';
+        const newFacing = currentFacing === 'user' ? 'environment' : 'user';
+        cameraFacingModes[sourceId] = newFacing;
+        
+        console.log(`[Source ${sourceId}] Toggling camera facing to:`, newFacing);
+
+        // If currently streaming, stop streaming/publishing first
+        const isStreaming = isStreamingActive[sourceId] || false;
+        if (isStreaming) {
+            const streamBtn = document.getElementById(`btn-stream-toggle-${sourceId}`);
+            if (streamBtn) streamBtn.click();
+        }
+
+        // Toggle capture off and on to apply new facingMode constraint
+        const captureBtn = document.getElementById(`btn-device-capture-${sourceId}`);
+        if (captureBtn) {
+            captureBtn.click();
+            setTimeout(() => {
+                captureBtn.click();
+            }, 350);
+        }
+    }
 
     function resolveLocation(baseUrl, locationHeader) {
         if (!locationHeader) return null;
@@ -353,6 +389,8 @@
 
         isDeviceActive[sourceId] = false;
         setSourceState(sourceId, 'IDLE');
+        const flipBtn = document.getElementById(`btn-camera-flip-${sourceId}`);
+        if (flipBtn) flipBtn.style.display = 'none';
     }
 
     function stopRecording(sourceId) {
@@ -445,9 +483,14 @@
                 let stream = null;
                 const audioConstraints = { echoCancellation: true, noiseSuppression: true };
                 
-                if (sourceType === 'WEBCAM') {
+                 if (sourceType === 'WEBCAM') {
+                    const facing = cameraFacingModes[sourceId] || 'user';
                     stream = await navigator.mediaDevices.getUserMedia({ 
-                        video: { width: 1280, height: 720 }, 
+                        video: { 
+                            width: 1280, 
+                            height: 720,
+                            facingMode: { ideal: facing }
+                        }, 
                         audio: audioConstraints 
                     });
                 } else if (sourceType === 'SCREEN_SHARE' || sourceType === 'WEB_BROWSER') {
@@ -467,6 +510,9 @@
                 captureBtn.innerHTML = `<i class="fa-solid fa-stop me-1"></i> {% translate 'Stop Preview' %}`;
                 captureBtn.className = 'btn btn-danger btn-sm flex-grow-1';
                 streamBtn.disabled = false;
+
+                const flipBtn = document.getElementById(`btn-camera-flip-${sourceId}`);
+                if (flipBtn && sourceType === 'WEBCAM') flipBtn.style.display = 'inline-block';
             } catch (err) {
                 console.error("Device capture failed:", err);
                 alert("{% translate 'Failed to acquire media device.' %}");
