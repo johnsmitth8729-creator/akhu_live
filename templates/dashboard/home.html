@@ -610,13 +610,14 @@
         if (!videoEl || !container) return;
 
         const deg = videoRotations[streamId] || 0;
+        const isFullscreen = container.closest('.fullscreen-active') || document.fullscreenElement;
 
         if (deg === 0) {
             container.classList.remove('rotated-active');
             videoEl.style.transform = '';
             videoEl.style.width = '';
             videoEl.style.height = '';
-            videoEl.style.objectFit = '';
+            videoEl.style.objectFit = isFullscreen ? 'contain' : '';
         } else if (deg === 90 || deg === 270) {
             container.classList.add('rotated-active');
             
@@ -624,28 +625,40 @@
             const W = container.clientWidth || container.offsetWidth;
             const H = container.clientHeight || container.offsetHeight;
 
-            // Fit rotated 16:9 box inside container bounds
-            const h1 = H * 9 / 16;
             let w, h;
-            if (h1 <= W) {
-                w = H;
-                h = h1;
+            if (isFullscreen) {
+                // Immersive Fullscreen Cover: Stretch and scale to fill the entire viewport completely
+                const w1 = W * 16 / 9;
+                if (w1 >= H) {
+                    w = w1;
+                    h = W;
+                } else {
+                    w = H;
+                    h = H * 9 / 16;
+                }
             } else {
-                w = W * 16 / 9;
-                h = W;
+                // Card Contain: Fit rotated video inside normal card box boundaries without overflowing
+                const h1 = H * 9 / 16;
+                if (h1 <= W) {
+                    w = H;
+                    h = h1;
+                } else {
+                    w = W * 16 / 9;
+                    h = W;
+                }
             }
 
             videoEl.style.transform = `rotate(${deg}deg)`;
             videoEl.style.width = `${w}px`;
             videoEl.style.height = `${h}px`;
-            videoEl.style.objectFit = 'contain';
+            videoEl.style.objectFit = 'cover';
         } else {
-            // 180 degrees (upside down)
+            // 180 degrees (upside-down)
             container.classList.add('rotated-active');
             videoEl.style.transform = `rotate(${deg}deg)`;
             videoEl.style.width = '';
             videoEl.style.height = '';
-            videoEl.style.objectFit = '';
+            videoEl.style.objectFit = isFullscreen ? 'contain' : '';
         }
 
         if (icon) {
