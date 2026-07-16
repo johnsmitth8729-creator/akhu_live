@@ -142,3 +142,8 @@ body.video-wall-active .video-container {
     border-radius: 4px !important;
 }
 
+/* Fullscreen video containment to prevent cropping */
+.fullscreen-active video, .fullscreen-active iframe {
+    object-fit: contain !important;
+}
+
