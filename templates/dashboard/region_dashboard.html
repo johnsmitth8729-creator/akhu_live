@@ -320,7 +320,7 @@
             if (this.reconnectAttempts < this.maxReconnectAttempts) {
                 this.reconnectAttempts++;
                 this.showLoading(true);
-                setTimeout(() => this.start(), 4000);
+                this.reconnectTimeout = setTimeout(() => this.start(), 4000);
             } else {
                 this.showOffline(true, "{% translate 'Stream disconnected.' %}");
             }
@@ -333,6 +333,10 @@
         }
 
         destroy() {
+            if (this.reconnectTimeout) {
+                clearTimeout(this.reconnectTimeout);
+                this.reconnectTimeout = null;
+            }
             if (this.peerConnection) this.peerConnection.close();
             if (this.hlsPlayer) this.hlsPlayer.destroy();
             this.videoEl.srcObject = null;

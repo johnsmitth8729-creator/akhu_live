@@ -275,6 +275,11 @@
 
     function stopPublisher(sourceId) {
         console.log(`[Source ${sourceId}] stopPublisher called.`);
+        if (publisherReconnectTimers[sourceId]) {
+            console.log(`[Source ${sourceId}] Clearing publisher reconnect timer.`);
+            clearTimeout(publisherReconnectTimers[sourceId]);
+            delete publisherReconnectTimers[sourceId];
+        }
         if (publisherPeerConnections[sourceId]) {
             console.log(`[Source ${sourceId}] Closing publisher PeerConnection.`);
             try { publisherPeerConnections[sourceId].close(); } catch(e) {}

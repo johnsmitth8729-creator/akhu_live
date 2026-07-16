@@ -407,7 +407,7 @@
                 const delay = delays[this.reconnectAttempts];
                 this.reconnectAttempts++;
                 console.log(`[StreamPlayer ${this.cameraId}] Reconnecting WebRTC in ${delay}ms...`);
-                setTimeout(() => this.start(), delay);
+                this.reconnectTimeout = setTimeout(() => this.start(), delay);
             } else if (this.reconnectAttempts === delays.length) {
                 this.reconnectAttempts++;
                 console.log(`[StreamPlayer ${this.cameraId}] WebRTC failed. Trying HLS fallback...`);
@@ -440,6 +440,10 @@
         }
 
         destroy() {
+            if (this.reconnectTimeout) {
+                clearTimeout(this.reconnectTimeout);
+                this.reconnectTimeout = null;
+            }
             if (this.statsInterval) clearInterval(this.statsInterval);
             if (this.peerConnection) this.peerConnection.close();
             if (this.hlsPlayer) this.hlsPlayer.destroy();
