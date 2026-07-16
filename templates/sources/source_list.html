@@ -683,13 +683,21 @@
                 await waitForIceGathering(pc);
                 console.log(`[Source ${sourceId}] ICE gathering completed.`);
 
-                const sdpToSend = pc.localDescription.sdp;
+                // Filter SDP offer to keep only TCP candidates
+                const sdpOffer = pc.localDescription.sdp;
+                const filteredOffer = sdpOffer.split('\n').map(line => {
+                    if (line.startsWith('a=candidate:') && !line.toLowerCase().includes('tcp')) {
+                        return '';
+                    }
+                    return line;
+                }).filter(Boolean).join('\n');
+
                 console.log(`[Source ${sourceId}] Sending offer SDP to WHIP endpoint...`);
                 
                 const whipRes = await fetch(whipUrl, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/sdp' },
-                    body: sdpToSend
+                    body: filteredOffer
                 });
 
                 if (whipRes.status === 200 || whipRes.status === 201) {
@@ -705,10 +713,18 @@
                     }
 
                     const answerSdp = await whipRes.text();
+                    // Filter SDP answer to keep only TCP candidates
+                    const filteredAnswer = answerSdp.split('\n').map(line => {
+                        if (line.startsWith('a=candidate:') && !line.toLowerCase().includes('tcp')) {
+                            return '';
+                        }
+                        return line;
+                    }).filter(Boolean).join('\n');
+
                     console.log(`[Source ${sourceId}] Setting remote description (Answer SDP)...`);
                     await pc.setRemoteDescription(new RTCSessionDescription({
                         type: 'answer',
-                        sdp: answerSdp
+                        sdp: filteredAnswer
                     }));
 
                     console.log(`[Source ${sourceId}] Registering stream online state with Django...`);
@@ -1023,13 +1039,21 @@
             await waitForIceGathering(pc);
             console.log(`[Source ${sourceId}] Subscriber ICE gathering completed.`);
 
-            const sdpToSend = pc.localDescription.sdp;
+            // Filter SDP offer to keep only TCP candidates
+            const sdpOffer = pc.localDescription.sdp;
+            const filteredOffer = sdpOffer.split('\n').map(line => {
+                if (line.startsWith('a=candidate:') && !line.toLowerCase().includes('tcp')) {
+                    return '';
+                }
+                return line;
+            }).filter(Boolean).join('\n');
+
             console.log(`[Source ${sourceId}] Sending offer to WHEP endpoint:`, whepUrl);
             
             const response = await fetch(whepUrl, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/sdp' },
-                body: sdpToSend
+                body: filteredOffer
             });
             
             if (response.status === 200 || response.status === 201) {
@@ -1043,10 +1067,18 @@
                 }
 
                 const answerSdp = await response.text();
+                // Filter SDP answer to keep only TCP candidates
+                const filteredAnswer = answerSdp.split('\n').map(line => {
+                    if (line.startsWith('a=candidate:') && !line.toLowerCase().includes('tcp')) {
+                        return '';
+                    }
+                    return line;
+                }).filter(Boolean).join('\n');
+
                 console.log(`[Source ${sourceId}] Setting remote description (Answer SDP)...`);
                 await pc.setRemoteDescription(new RTCSessionDescription({
                     type: 'answer',
-                    sdp: answerSdp
+                    sdp: filteredAnswer
                 }));
             } else {
                 const errorText = await response.text();
