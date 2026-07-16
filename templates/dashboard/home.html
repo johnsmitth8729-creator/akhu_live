@@ -605,6 +605,56 @@
         return urlStr;
     }
 
+    // ─── Dashboard Grid: Active stream players ─────────────────────────────
+    const activePlayers = {};
+
+    document.addEventListener("DOMContentLoaded", () => {
+        // Start streaming players for each online camera/source on the grid
+        {% for region, streams in region_streams.items %}
+            {% for c in streams %}
+                {% if c.is_online %}
+                    activePlayers["{{ c.unique_id }}"] = new StreamPlayer(
+                        "{{ c.unique_id }}",
+                        resolveDynamicUrl("{{ c.stream_urls.whep }}"),
+                        resolveDynamicUrl("{{ c.stream_urls.hls }}")
+                    );
+                    activePlayers["{{ c.unique_id }}"].start();
+                {% endif %}
+            {% endfor %}
+        {% endfor %}
+
+        // Background Status Polling
+        setInterval(checkStatusesAsync, 15000);
+    });
+
+    // Capture screenshot from live video canvas
+    function captureStreamSnapshot(streamId, name) {
+        const video = document.getElementById(`video-${streamId}`);
+        if (!video || !video.videoWidth) {
+            alert("{% translate 'Snapshot failed: Video stream not active.' %}");
+            return;
+        }
+
+        const canvas = document.createElement('canvas');
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+        ctx.fillStyle = "rgba(15, 23, 42, 0.6)";
+        ctx.fillRect(0, canvas.height - 40, canvas.width, 40);
+        ctx.fillStyle = "#ffffff";
+        ctx.font = "bold 13px Inter, sans-serif";
+        ctx.fillText(`${name} | ${new Date().toLocaleString()}`, 20, canvas.height - 15);
+
+        const link = document.createElement('a');
+        link.download = `${name.replace(/\s+/g, '_')}_Snapshot.png`;
+        link.href = canvas.toDataURL("image/png");
+        link.click();
+    }
+
+    // ─── Modal Player Components ───────────────────────────────────────────
+
     // Modal Live Engine Component
     class LiveEngine {
         constructor(videoEl, whepUrl, hlsUrl) {
