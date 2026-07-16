@@ -288,6 +288,13 @@
         }
         isStreamingActive[sourceId] = false;
 
+        // Notify Django that streaming has stopped to sync database status
+        fetch('/api/stop-stream/', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': '{{ csrf_token }}' },
+            body: JSON.stringify({ source_id: sourceId })
+        }).catch(err => console.warn("Failed to notify Django stop-stream:", err));
+
         if (sourceStates[sourceId] === 'PUBLISHING') {
             setSourceState(sourceId, 'PREVIEW');
         }
