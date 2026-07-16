@@ -172,6 +172,14 @@ body.video-wall-active .video-container {
     object-fit: contain !important;
 }
 
+/* Ensure rotated videos are centered and have black background */
+.video-container.rotated-active {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    background-color: #000000 !important;
+}
+
 /* =======================================
    MOBILE IMPROVEMENTS (< 768px)
    ======================================= */

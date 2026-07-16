@@ -601,6 +601,71 @@
         link.click();
     }
 
+    // Rotate video based on actual container dimension bounds
+    const videoRotations = {};
+    function applyVideoRotation(streamId) {
+        const videoEl = document.getElementById(`video-${streamId}`);
+        const container = videoEl ? videoEl.closest('.video-container') : null;
+        const icon = document.getElementById(`rotate-icon-${streamId}`);
+        if (!videoEl || !container) return;
+
+        const deg = videoRotations[streamId] || 0;
+
+        if (deg === 0) {
+            container.classList.remove('rotated-active');
+            videoEl.style.transform = '';
+            videoEl.style.width = '';
+            videoEl.style.height = '';
+            videoEl.style.objectFit = '';
+        } else if (deg === 90 || deg === 270) {
+            container.classList.add('rotated-active');
+            
+            // Recalculate dimensions dynamically based on parent container sizes
+            const W = container.clientWidth || container.offsetWidth;
+            const H = container.clientHeight || container.offsetHeight;
+
+            // Fit rotated 16:9 box inside container bounds
+            const h1 = H * 9 / 16;
+            let w, h;
+            if (h1 <= W) {
+                w = H;
+                h = h1;
+            } else {
+                w = W * 16 / 9;
+                h = W;
+            }
+
+            videoEl.style.transform = `rotate(${deg}deg)`;
+            videoEl.style.width = `${w}px`;
+            videoEl.style.height = `${h}px`;
+            videoEl.style.objectFit = 'contain';
+        } else {
+            // 180 degrees (upside down)
+            container.classList.add('rotated-active');
+            videoEl.style.transform = `rotate(${deg}deg)`;
+            videoEl.style.width = '';
+            videoEl.style.height = '';
+            videoEl.style.objectFit = '';
+        }
+
+        if (icon) {
+            icon.style.transform = `rotate(${deg}deg)`;
+            icon.style.transition = 'transform 0.3s ease';
+        }
+    }
+
+    function rotateVideo(streamId) {
+        videoRotations[streamId] = ((videoRotations[streamId] || 0) + 90) % 360;
+        applyVideoRotation(streamId);
+    }
+
+    // Auto-update video rotations on window resize (especially orientation changes)
+    window.addEventListener('resize', () => {
+        Object.keys(videoRotations).forEach(streamId => {
+            applyVideoRotation(streamId);
+        });
+    });
+
     // Toggle card fullscreen mode using native browser Fullscreen API
     function toggleCardFullscreen(streamId) {
         const card = document.getElementById(`card-camera-${streamId}`);
@@ -627,7 +692,7 @@
             card.style.cssText = 'background:#000!important;display:flex!important;align-items:center!important;justify-content:center!important;';
             const vc = card.querySelector('.video-container');
             if (vc) vc.style.cssText = 'width:100vw!important;height:100vh!important;aspect-ratio:auto!important;border-radius:0!important;background:#000!important;';
-            if (videoEl) videoEl.style.objectFit = 'contain';
+            applyVideoRotation(streamId);
         }
 
         function removeFullscreenStyles(videoEl) {
@@ -635,8 +700,8 @@
             card.style.cssText = '';
             const vc = card.querySelector('.video-container');
             if (vc) vc.style.cssText = '';
-            if (videoEl) videoEl.style.objectFit = '';
             card.classList.remove('fullscreen-active');
+            applyVideoRotation(streamId);
         }
 
         if (!fullscreenElement) {
@@ -644,7 +709,8 @@
             if (requestFullscreen) {
                 requestFullscreen.call(card).then(() => {
                     icon.className = 'fa-solid fa-compress';
-                    applyFullscreenStyles(videoEl);
+                    // We must wait a tiny bit for the browser DOM reflow to finish before applying size styles
+                    setTimeout(() => applyFullscreenStyles(videoEl), 100);
                 }).catch(() => {
                     card.classList.add('fullscreen-active');
                     applyFullscreenStyles(videoEl);
@@ -662,9 +728,10 @@
                     removeFullscreenStyles(videoEl);
                     icon.className = 'fa-solid fa-expand';
                 }).catch(() => {});
+            } else {
+                removeFullscreenStyles(videoEl);
+                icon.className = 'fa-solid fa-expand';
             }
-            removeFullscreenStyles(videoEl);
-            icon.className = 'fa-solid fa-expand';
         }
 
         // Sync icon when fullscreen is exited via ESC key or swipe down
@@ -683,44 +750,6 @@
         };
         document.addEventListener('fullscreenchange', fsChangeHandler);
         document.addEventListener('webkitfullscreenchange', fsChangeHandler);
-    }
-
-    // Rotate video 90° steps for landscape viewing on mobile
-    const videoRotations = {};
-    function rotateVideo(streamId) {
-        const videoEl = document.getElementById(`video-${streamId}`);
-        const container = videoEl ? videoEl.closest('.video-container') : null;
-        const icon = document.getElementById(`rotate-icon-${streamId}`);
-        if (!videoEl || !container) return;
-
-        videoRotations[streamId] = ((videoRotations[streamId] || 0) + 90) % 360;
-        const deg = videoRotations[streamId];
-
-        if (deg === 0) {
-            videoEl.style.transform = '';
-            videoEl.style.width = '';
-            videoEl.style.height = '';
-            container.style.aspectRatio = '16/9';
-        } else if (deg === 90 || deg === 270) {
-            // Landscape: rotate and scale to fill container
-            const cw = container.offsetWidth;
-            const ch = container.offsetWidth * 9 / 16;
-            videoEl.style.transform = `rotate(${deg}deg)`;
-            videoEl.style.width = `${ch}px`;
-            videoEl.style.height = `${cw}px`;
-            videoEl.style.objectFit = 'contain';
-            container.style.aspectRatio = '16/9';
-        } else {
-            // 180° — upside down
-            videoEl.style.transform = `rotate(${deg}deg)`;
-            videoEl.style.width = '';
-            videoEl.style.height = '';
-        }
-
-        if (icon) {
-            icon.style.transform = `rotate(${deg}deg)`;
-            icon.style.transition = 'transform 0.3s ease';
-        }
     }
 
     // Polling statuses
