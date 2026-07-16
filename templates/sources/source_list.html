@@ -280,16 +280,16 @@
             clearTimeout(publisherReconnectTimers[sourceId]);
             delete publisherReconnectTimers[sourceId];
         }
-        if (publisherPeerConnections[sourceId]) {
-            console.log(`[Source ${sourceId}] Closing publisher PeerConnection.`);
-            try { publisherPeerConnections[sourceId].close(); } catch(e) {}
-            delete publisherPeerConnections[sourceId];
-        }
         if (publisherSessionUrls[sourceId]) {
             const url = publisherSessionUrls[sourceId];
             console.log(`[Source ${sourceId}] Sending DELETE to WHIP session:`, url);
             fetch(url, { method: 'DELETE' }).catch(err => console.warn("Failed to delete publisher session:", err));
             delete publisherSessionUrls[sourceId];
+        }
+        if (publisherPeerConnections[sourceId]) {
+            console.log(`[Source ${sourceId}] Closing publisher PeerConnection.`);
+            try { publisherPeerConnections[sourceId].close(); } catch(e) {}
+            delete publisherPeerConnections[sourceId];
         }
         isStreamingActive[sourceId] = false;
 
@@ -307,16 +307,16 @@
 
     function stopViewer(sourceId) {
         console.log(`[Source ${sourceId}] stopViewer called.`);
-        if (viewerPeerConnections[sourceId]) {
-            console.log(`[Source ${sourceId}] Closing viewer PeerConnection.`);
-            try { viewerPeerConnections[sourceId].close(); } catch(e) {}
-            delete viewerPeerConnections[sourceId];
-        }
         if (viewerSessionUrls[sourceId]) {
             const url = viewerSessionUrls[sourceId];
             console.log(`[Source ${sourceId}] Sending DELETE to WHEP session:`, url);
             fetch(url, { method: 'DELETE' }).catch(err => console.warn("Failed to delete viewer session:", err));
             delete viewerSessionUrls[sourceId];
+        }
+        if (viewerPeerConnections[sourceId]) {
+            console.log(`[Source ${sourceId}] Closing viewer PeerConnection.`);
+            try { viewerPeerConnections[sourceId].close(); } catch(e) {}
+            delete viewerPeerConnections[sourceId];
         }
 
         if (activeHlsPlayers[sourceId]) {
