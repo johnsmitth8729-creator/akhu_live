@@ -145,10 +145,6 @@
                                     <button onclick="captureStreamSnapshot('{{ c.unique_id }}', '{{ c.name }}')" title="{% translate 'Take Snapshot' %}">
                                         <i class="fa-solid fa-camera"></i>
                                     </button>
-                                    <!-- Rotate (mobile) -->
-                                    <button onclick="rotateVideo('{{ c.unique_id }}')" title="{% translate 'Rotate Video' %}" id="rotate-btn-{{ c.unique_id }}" class="d-md-none">
-                                        <i class="fa-solid fa-rotate-right" id="rotate-icon-{{ c.unique_id }}"></i>
-                                    </button>
                                     <!-- Fullscreen -->
                                     <button onclick="toggleCardFullscreen('{{ c.unique_id }}')" title="{% translate 'Fullscreen View' %}">
                                         <i class="fa-solid fa-expand" id="fs-icon-{{ c.unique_id }}"></i>
@@ -601,95 +597,17 @@
         link.click();
     }
 
-    // Rotate video based on actual container dimension bounds
-    const videoRotations = {};
-    function applyVideoRotation(streamId) {
-        const videoEl = document.getElementById(`video-${streamId}`);
-        const container = videoEl ? videoEl.closest('.video-container') : null;
-        const icon = document.getElementById(`rotate-icon-${streamId}`);
-        if (!videoEl || !container) return;
-
-        const deg = videoRotations[streamId] || 0;
-
-        // Detect fullscreen mode (native API or CSS fallback)
-        const isFullscreen = !!(
-            document.fullscreenElement ||
-            document.webkitFullscreenElement ||
-            document.mozFullScreenElement ||
-            document.msFullscreenElement ||
-            container.closest('.fullscreen-active')
-        );
-
-        if (deg === 0) {
-            container.classList.remove('rotated-active');
-            videoEl.style.cssText = '';  // clear all inline styles
-        } else if (deg === 90 || deg === 270) {
-            container.classList.add('rotated-active');
-
-            let w, h;
-            if (isFullscreen) {
-                // Fullscreen: swap viewport width/height so the rotated video fills the entire screen
-                // After rotate(90deg): visual_width = element_height, visual_height = element_width
-                // We want visual_width=vw and visual_height=vh, so:
-                //   element_width = vh (so visual_height = vh)
-                //   element_height = vw (so visual_width = vw)
-                const vw = window.innerWidth;
-                const vh = window.innerHeight;
-                w = vh;   // element width = viewport HEIGHT
-                h = vw;   // element height = viewport WIDTH
-                videoEl.style.objectFit = 'cover';
-            } else {
-                // Normal card mode: fit within card's 16:9 box
-                // Card: W wide, H = W*9/16 tall
-                // After rotation: visual_width = element_height, visual_height = element_width
-                // Set element_width = H and element_height = W so it fills exactly
-                const W = container.clientWidth || container.offsetWidth;
-                const H = W * 9 / 16;
-                w = H;    // element width = card height
-                h = W;    // element height = card width
-                videoEl.style.objectFit = 'contain';
-            }
-
-            videoEl.style.width = `${w}px`;
-            videoEl.style.height = `${h}px`;
-            videoEl.style.transform = `rotate(${deg}deg)`;
-        } else {
-            // 180 degrees (upside-down)
-            container.classList.add('rotated-active');
-            videoEl.style.transform = `rotate(${deg}deg)`;
-            videoEl.style.width = '';
-            videoEl.style.height = '';
-            videoEl.style.objectFit = isFullscreen ? 'contain' : '';
-        }
-
-        if (icon) {
-            icon.style.transform = `rotate(${deg}deg)`;
-            icon.style.transition = 'transform 0.3s ease';
-        }
-    }
-
-    function rotateVideo(streamId) {
-        videoRotations[streamId] = ((videoRotations[streamId] || 0) + 90) % 360;
-        applyVideoRotation(streamId);
-    }
-
-    // Auto-update video rotations on window resize (especially orientation changes)
-    window.addEventListener('resize', () => {
-        Object.keys(videoRotations).forEach(streamId => {
-            applyVideoRotation(streamId);
-        });
-    });
-
     // Toggle card fullscreen mode using native browser Fullscreen API
     function toggleCardFullscreen(streamId) {
-        const card = document.getElementById(`card-camera-${streamId}`);
+        const videoEl = document.getElementById(`video-${streamId}`);
+        const container = videoEl ? videoEl.closest('.video-container') : null;
         const icon = document.getElementById(`fs-icon-${streamId}`);
-        const cardBody = card.querySelector('.card-body');
+        if (!container || !videoEl) return;
 
-        const requestFullscreen = card.requestFullscreen
-            || card.webkitRequestFullscreen
-            || card.mozRequestFullScreen
-            || card.msRequestFullscreen;
+        const requestFullscreen = container.requestFullscreen
+            || container.webkitRequestFullscreen
+            || container.mozRequestFullScreen
+            || container.msRequestFullscreen;
 
         const exitFullscreen = document.exitFullscreen
             || document.webkitExitFullscreen
@@ -701,69 +619,98 @@
             || document.mozFullScreenElement
             || document.msFullscreenElement;
 
-        function applyFullscreenStyles(videoEl) {
-            if (cardBody) cardBody.style.display = 'none';
-            card.style.cssText = 'background:#000!important;display:flex!important;align-items:center!important;justify-content:center!important;';
-            const vc = card.querySelector('.video-container');
-            if (vc) vc.style.cssText = 'width:100vw!important;height:100vh!important;aspect-ratio:auto!important;border-radius:0!important;background:#000!important;';
-            applyVideoRotation(streamId);
+        // Graceful iOS Safari fallback: If container cannot request fullscreen but video supports native iOS fullscreen player
+        if (!fullscreenElement && !requestFullscreen && typeof videoEl.webkitEnterFullscreen === 'function') {
+            try {
+                videoEl.webkitEnterFullscreen();
+            } catch (e) {
+                console.warn('Native iOS video fullscreen failed:', e);
+            }
+            return;
         }
 
-        function removeFullscreenStyles(videoEl) {
-            if (cardBody) cardBody.style.display = '';
-            card.style.cssText = '';
-            const vc = card.querySelector('.video-container');
-            if (vc) vc.style.cssText = '';
-            card.classList.remove('fullscreen-active');
-            applyVideoRotation(streamId);
+        // Lock screen orientation to landscape
+        function lockOrientation() {
+            if (screen.orientation && typeof screen.orientation.lock === 'function') {
+                screen.orientation.lock('landscape').catch((err) => {
+                    console.warn('Screen orientation lock to landscape failed:', err);
+                });
+            } else if (screen.lockOrientation) {
+                try { screen.lockOrientation('landscape'); } catch (e) {}
+            } else if (screen.mozLockOrientation) {
+                try { screen.mozLockOrientation('landscape'); } catch (e) {}
+            } else if (screen.msLockOrientation) {
+                try { screen.msLockOrientation('landscape'); } catch (e) {}
+            }
+        }
+
+        // Unlock screen orientation
+        function unlockOrientation() {
+            if (screen.orientation && typeof screen.orientation.unlock === 'function') {
+                try { screen.orientation.unlock(); } catch (e) {}
+            } else if (screen.unlockOrientation) {
+                try { screen.unlockOrientation(); } catch (e) {}
+            } else if (screen.mozUnlockOrientation) {
+                try { screen.mozUnlockOrientation(); } catch (e) {}
+            } else if (screen.msUnlockOrientation) {
+                try { screen.msUnlockOrientation(); } catch (e) {}
+            }
         }
 
         if (!fullscreenElement) {
-            const videoEl = card.querySelector('video');
             if (requestFullscreen) {
-                requestFullscreen.call(card).then(() => {
-                    icon.className = 'fa-solid fa-compress';
-                    // We must wait a tiny bit for the browser DOM reflow to finish before applying size styles
-                    setTimeout(() => applyFullscreenStyles(videoEl), 100);
-                }).catch(() => {
-                    card.classList.add('fullscreen-active');
-                    applyFullscreenStyles(videoEl);
-                    icon.className = 'fa-solid fa-compress';
+                requestFullscreen.call(container).then(() => {
+                    if (icon) icon.className = 'fa-solid fa-compress';
+                    lockOrientation();
+                }).catch((err) => {
+                    // Fallback to CSS fullscreen
+                    container.classList.add('fullscreen-active');
+                    if (icon) icon.className = 'fa-solid fa-compress';
                 });
             } else {
-                card.classList.add('fullscreen-active');
-                applyFullscreenStyles(videoEl);
-                icon.className = 'fa-solid fa-compress';
+                // Fallback to CSS fullscreen
+                container.classList.add('fullscreen-active');
+                if (icon) icon.className = 'fa-solid fa-compress';
             }
         } else {
-            const videoEl = card.querySelector('video');
             if (exitFullscreen) {
                 exitFullscreen.call(document).then(() => {
-                    removeFullscreenStyles(videoEl);
-                    icon.className = 'fa-solid fa-expand';
-                }).catch(() => {});
+                    if (icon) icon.className = 'fa-solid fa-expand';
+                    unlockOrientation();
+                }).catch((err) => {
+                    container.classList.remove('fullscreen-active');
+                    if (icon) icon.className = 'fa-solid fa-expand';
+                });
             } else {
-                removeFullscreenStyles(videoEl);
-                icon.className = 'fa-solid fa-expand';
+                container.classList.remove('fullscreen-active');
+                if (icon) icon.className = 'fa-solid fa-expand';
             }
         }
 
-        // Sync icon when fullscreen is exited via ESC key or swipe down
+        // Sync icon/orientation when fullscreen exits (e.g. via ESC key, Android Back button)
         const fsChangeHandler = () => {
-            const isFullscreen = document.fullscreenElement
-                || document.webkitFullscreenElement
-                || document.mozFullScreenElement
-                || document.msFullscreenElement;
-            if (!isFullscreen) {
-                const videoEl = card.querySelector('video');
-                removeFullscreenStyles(videoEl);
-                icon.className = 'fa-solid fa-expand';
+            const isFS = !!(
+                document.fullscreenElement ||
+                document.webkitFullscreenElement ||
+                document.mozFullScreenElement ||
+                document.msFullscreenElement ||
+                container.classList.contains('fullscreen-active')
+            );
+            if (!isFS) {
+                if (icon) icon.className = 'fa-solid fa-expand';
+                container.classList.remove('fullscreen-active');
+                unlockOrientation();
+                
                 document.removeEventListener('fullscreenchange', fsChangeHandler);
                 document.removeEventListener('webkitfullscreenchange', fsChangeHandler);
+                document.removeEventListener('mozfullscreenchange', fsChangeHandler);
+                document.removeEventListener('MSFullscreenChange', fsChangeHandler);
             }
         };
         document.addEventListener('fullscreenchange', fsChangeHandler);
         document.addEventListener('webkitfullscreenchange', fsChangeHandler);
+        document.addEventListener('mozfullscreenchange', fsChangeHandler);
+        document.addEventListener('MSFullscreenChange', fsChangeHandler);
     }
 
     // Polling statuses
