@@ -172,3 +172,57 @@ body.video-wall-active .video-container {
     object-fit: contain !important;
 }
 
+/* =======================================
+   MOBILE IMPROVEMENTS (< 768px)
+   ======================================= */
+@media (max-width: 767.98px) {
+
+    /* Larger touch targets for camera controls on mobile */
+    .camera-controls {
+        opacity: 1 !important;
+        bottom: 6px;
+        right: 6px;
+        padding: 0.3rem;
+        gap: 6px;
+    }
+
+    .camera-controls button, .camera-controls a {
+        padding: 7px 10px;
+        font-size: 0.85rem;
+        min-width: 34px;
+        min-height: 34px;
+    }
+
+    /* Smoother video rotation transition */
+    .video-container video {
+        transition: transform 0.35s cubic-bezier(0.4,0,0.2,1),
+                    width 0.35s ease,
+                    height 0.35s ease;
+        transform-origin: center center;
+    }
+
+    /* Card info section: more compact on mobile */
+    .video-card-vms .card-body {
+        padding: 0.6rem 0.75rem !important;
+    }
+
+    .video-card-vms .card-title {
+        font-size: 0.85rem !important;
+    }
+
+    /* Status badge smaller on mobile */
+    .vms-overlay-bottom .badge {
+        font-size: 0.55rem !important;
+    }
+
+    /* No hover transform on mobile (touch devices) */
+    .video-card-vms:hover {
+        transform: none;
+    }
+
+    /* Full-width grid on very small screens */
+    .vms-grid-container .col {
+        padding-left: 8px;
+        padding-right: 8px;
+    }
+}
