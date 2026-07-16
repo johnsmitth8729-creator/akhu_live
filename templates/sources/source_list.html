@@ -547,7 +547,11 @@
                 console.log(`[Source ${sourceId}] Initiating WHIP publish to:`, whipUrl);
                 
                 const iceServers = [];
-                const stunUrls = "{{ stun_url }}".split(",").map(url => url.trim());
+                let stunUrlsRaw = "{{ stun_url }}".trim();
+                if (!stunUrlsRaw) {
+                    stunUrlsRaw = "stun:stun.l.google.com:19302,stun:stun1.l.google.com:19302";
+                }
+                const stunUrls = stunUrlsRaw.split(",").map(url => url.trim());
                 stunUrls.forEach(url => { if (url) iceServers.push({ urls: url }); });
                 const turnUrls = "{{ turn_url }}".split(",").map(url => url.trim());
                 turnUrls.forEach(url => { 
@@ -933,7 +937,11 @@
 
         try {
             const iceServers = [];
-            const stunUrls = "{{ stun_url }}".split(",").map(url => url.trim());
+            let stunUrlsRaw = "{{ stun_url }}".trim();
+            if (!stunUrlsRaw) {
+                stunUrlsRaw = "stun:stun.l.google.com:19302,stun:stun1.l.google.com:19302";
+            }
+            const stunUrls = stunUrlsRaw.split(",").map(url => url.trim());
             stunUrls.forEach(url => { if (url) iceServers.push({ urls: url }); });
             
             console.log(`[Source ${sourceId}] Creating subscriber PeerConnection with ICE servers:`, iceServers);
