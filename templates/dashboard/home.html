@@ -912,20 +912,36 @@
             }
 
             const fsChangeHandler = () => {
-                const container = document.getElementById('vmsVideoViewport');
-                const isFS = !!(
-                    document.fullscreenElement ||
-                    document.webkitFullscreenElement ||
-                    document.mozFullscreenElement ||
-                    document.msFullscreenElement ||
-                    (container && container.classList.contains('fullscreen-active'))
-                );
-                if (!isFS) {
+                const fsElement = document.fullscreenElement 
+                    || document.webkitFullscreenElement 
+                    || document.mozFullscreenElement 
+                    || document.msFullscreenElement;
+                
+                const isVideoFS = fsElement && (fsElement.id === 'playerLiveVideo' || fsElement.id === 'playerDvrVideo');
+                
+                if (isVideoFS) {
+                    FullscreenManager.lockOrientation();
+                } else {
                     FullscreenManager.unlockOrientation();
                 }
             };
+            
             document.addEventListener('fullscreenchange', fsChangeHandler);
             document.addEventListener('webkitfullscreenchange', fsChangeHandler);
+            document.addEventListener('mozfullscreenchange', fsChangeHandler);
+            document.addEventListener('MSFullscreenChange', fsChangeHandler);
+
+            const setupIosFsListeners = (videoEl) => {
+                if (!videoEl) return;
+                videoEl.addEventListener('webkitbeginfullscreen', () => {
+                    FullscreenManager.lockOrientation();
+                });
+                videoEl.addEventListener('webkitendfullscreen', () => {
+                    FullscreenManager.unlockOrientation();
+                });
+            };
+            setupIosFsListeners(this.liveVideo);
+            setupIosFsListeners(this.dvrVideo);
         }
 
         open(streamId, name, whepUrl, hlsUrl) {

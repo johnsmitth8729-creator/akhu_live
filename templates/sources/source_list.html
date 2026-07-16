@@ -277,6 +277,108 @@
         }
     }
 
+    // Device Orientation and Resolution handler for dynamic publisher camera adjustment
+    let lastOrientation = getDeviceOrientation();
+
+    function getDeviceOrientation() {
+        if (screen.orientation && screen.orientation.type) {
+            return screen.orientation.type.includes('landscape') ? 'landscape' : 'portrait';
+        }
+        return window.innerHeight < window.innerWidth ? 'landscape' : 'portrait';
+    }
+
+    async function handleOrientationChange() {
+        const currentOrientation = getDeviceOrientation();
+        if (currentOrientation === lastOrientation) return;
+        lastOrientation = currentOrientation;
+        
+        console.log("Device orientation change detected:", currentOrientation);
+        
+        for (const sourceId of Object.keys(isDeviceActive)) {
+            if (isDeviceActive[sourceId] && localStreams[sourceId]) {
+                await updateCameraOrientation(sourceId, currentOrientation);
+            }
+        }
+    }
+
+    window.addEventListener('resize', handleOrientationChange);
+    if (screen.orientation) {
+        screen.orientation.addEventListener('change', handleOrientationChange);
+    }
+    window.addEventListener('orientationchange', handleOrientationChange);
+
+    async function updateCameraOrientation(sourceId, orientation) {
+        console.log(`[Source ${sourceId}] Adjusting track constraints to match orientation:`, orientation);
+        const isLandscape = orientation === 'landscape';
+        const idealWidth = isLandscape ? 1280 : 720;
+        const idealHeight = isLandscape ? 720 : 1280;
+        
+        const stream = localStreams[sourceId];
+        if (!stream) return;
+        
+        const videoTrack = stream.getVideoTracks()[0];
+        if (!videoTrack) return;
+        
+        const constraints = {
+            width: { ideal: idealWidth },
+            height: { ideal: idealHeight }
+        };
+        
+        try {
+            console.log(`[Source ${sourceId}] Trying applyConstraints:`, constraints);
+            await videoTrack.applyConstraints(constraints);
+            console.log(`[Source ${sourceId}] applyConstraints completed successfully.`);
+        } catch (err) {
+            console.warn(`[Source ${sourceId}] applyConstraints failed, falling back to seamless track recreation:`, err);
+            
+            try {
+                const facing = cameraFacingModes[sourceId] || 'environment';
+                const audioConstraints = { echoCancellation: true, noiseSuppression: true };
+                
+                const tempStream = await navigator.mediaDevices.getUserMedia({
+                    video: {
+                        width: { ideal: idealWidth },
+                        height: { ideal: idealHeight },
+                        facingMode: { ideal: facing }
+                    },
+                    audio: audioConstraints
+                });
+                
+                const newVideoTrack = tempStream.getVideoTracks()[0];
+                const newAudioTrack = tempStream.getAudioTracks()[0];
+                
+                // Update local preview element
+                const videoEl = document.getElementById(`local-preview-video-${sourceId}`);
+                if (videoEl) {
+                    videoEl.srcObject = tempStream;
+                }
+                
+                // Replace track inside active WebRTC connection without breaking the session
+                const pc = publisherPeerConnections[sourceId];
+                if (pc && pc.connectionState === 'connected') {
+                    const senders = pc.getSenders();
+                    const videoSender = senders.find(s => s.track && s.track.kind === 'video');
+                    if (videoSender && newVideoTrack) {
+                        console.log(`[Source ${sourceId}] Replacing WebRTC video track...`);
+                        await videoSender.replaceTrack(newVideoTrack);
+                    }
+                    const audioSender = senders.find(s => s.track && s.track.kind === 'audio');
+                    if (audioSender && newAudioTrack) {
+                        await audioSender.replaceTrack(newAudioTrack);
+                    }
+                }
+                
+                // Release old hardware tracks
+                stream.getTracks().forEach(t => t.stop());
+                
+                localStreams[sourceId] = tempStream;
+                console.log(`[Source ${sourceId}] Seamless track recreation completed.`);
+            } catch (recreateErr) {
+                console.error(`[Source ${sourceId}] Seamless track recreation failed:`, recreateErr);
+            }
+        }
+    }
+
     function resolveLocation(baseUrl, locationHeader) {
         if (!locationHeader) return null;
         if (locationHeader.startsWith('http://') || locationHeader.startsWith('https://')) {
@@ -533,10 +635,14 @@
                 
                  if (sourceType === 'WEBCAM') {
                     const facing = cameraFacingModes[sourceId] || 'environment';
+                    const orientation = getDeviceOrientation();
+                    const isLandscape = orientation === 'landscape';
+                    const idealWidth = isLandscape ? 1280 : 720;
+                    const idealHeight = isLandscape ? 720 : 1280;
                     stream = await navigator.mediaDevices.getUserMedia({ 
                         video: { 
-                            width: { ideal: 1920 },
-                            height: { ideal: 1080 },
+                            width: { ideal: idealWidth },
+                            height: { ideal: idealHeight },
                             facingMode: { ideal: facing }
                         }, 
                         audio: audioConstraints 
