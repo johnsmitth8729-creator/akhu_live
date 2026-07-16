@@ -597,21 +597,73 @@
         link.click();
     }
 
-    // Toggle card fullscreen mode
+    // Toggle card fullscreen mode using native browser Fullscreen API
     function toggleCardFullscreen(streamId) {
-        const col = document.getElementById(`col-camera-${streamId}`);
         const card = document.getElementById(`card-camera-${streamId}`);
         const icon = document.getElementById(`fs-icon-${streamId}`);
-        
-        if (card.classList.contains('fullscreen-active')) {
+
+        // Try native fullscreen on the card element
+        const requestFullscreen = card.requestFullscreen
+            || card.webkitRequestFullscreen
+            || card.mozRequestFullScreen
+            || card.msRequestFullscreen;
+
+        const exitFullscreen = document.exitFullscreen
+            || document.webkitExitFullscreen
+            || document.mozCancelFullScreen
+            || document.msExitFullscreen;
+
+        const fullscreenElement = document.fullscreenElement
+            || document.webkitFullscreenElement
+            || document.mozFullScreenElement
+            || document.msFullscreenElement;
+
+        if (!fullscreenElement) {
+            if (requestFullscreen) {
+                requestFullscreen.call(card).then(() => {
+                    icon.className = 'fa-solid fa-compress';
+                    // Ensure video fills the fullscreen card properly
+                    const videoEl = card.querySelector('video');
+                    if (videoEl) videoEl.style.objectFit = 'contain';
+                }).catch(() => {
+                    // Fallback to CSS fullscreen if native API blocked
+                    card.classList.add('fullscreen-active');
+                    icon.className = 'fa-solid fa-compress';
+                });
+            } else {
+                // Fallback for older browsers
+                card.classList.add('fullscreen-active');
+                icon.className = 'fa-solid fa-compress';
+            }
+        } else {
+            if (exitFullscreen) {
+                exitFullscreen.call(document).then(() => {
+                    icon.className = 'fa-solid fa-expand';
+                    const videoEl = card.querySelector('video');
+                    if (videoEl) videoEl.style.objectFit = '';
+                }).catch(() => {});
+            }
             card.classList.remove('fullscreen-active');
             icon.className = 'fa-solid fa-expand';
-            col.style.height = "auto";
-        } else {
-            card.classList.add('fullscreen-active');
-            icon.className = 'fa-solid fa-compress';
-            col.style.height = "100vh";
         }
+
+        // Sync icon when fullscreen is exited via ESC key
+        const fsChangeHandler = () => {
+            const isFullscreen = document.fullscreenElement
+                || document.webkitFullscreenElement
+                || document.mozFullScreenElement
+                || document.msFullscreenElement;
+            if (!isFullscreen) {
+                icon.className = 'fa-solid fa-expand';
+                card.classList.remove('fullscreen-active');
+                const videoEl = card.querySelector('video');
+                if (videoEl) videoEl.style.objectFit = '';
+                document.removeEventListener('fullscreenchange', fsChangeHandler);
+                document.removeEventListener('webkitfullscreenchange', fsChangeHandler);
+            }
+        };
+        document.addEventListener('fullscreenchange', fsChangeHandler);
+        document.addEventListener('webkitfullscreenchange', fsChangeHandler);
     }
 
     // Polling statuses

@@ -91,7 +91,7 @@
     color: var(--accent-color);
 }
 
-/* Fullscreen mode */
+/* CSS-based fullscreen fallback (for older browsers) */
 .fullscreen-active {
     position: fixed !important;
     top: 0 !important;
@@ -106,6 +106,31 @@
     height: 100% !important;
     aspect-ratio: auto !important;
     border-radius: 0 !important;
+}
+
+/* Native browser fullscreen API styles */
+:fullscreen .video-container,
+:-webkit-full-screen .video-container,
+:-moz-full-screen .video-container {
+    width: 100vw !important;
+    height: 100vh !important;
+    aspect-ratio: auto !important;
+    border-radius: 0 !important;
+    background: #000 !important;
+}
+
+:fullscreen video,
+:-webkit-full-screen video,
+:-moz-full-screen video {
+    width: 100% !important;
+    height: 100% !important;
+    object-fit: contain !important;
+}
+
+:fullscreen .card-body,
+:-webkit-full-screen .card-body,
+:-moz-full-screen .card-body {
+    display: none !important;
 }
 
 /* Custom grid widths for VMS Video Wall */
