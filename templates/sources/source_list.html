@@ -55,9 +55,9 @@
                 <!-- Video Container -->
                 <div class="video-container position-relative bg-black" style="height: 220px;">
                     <!-- Local Preview Video (for webcam/screen capture) -->
-                    <video id="local-preview-video-{{ s.id }}" autoplay muted playsinline class="w-100 h-100" style="display: {% if s.source_type == 'IP_CAMERA' %}none{% else %}block{% endif %};"></video>
+                    <video id="local-preview-video-{{ s.id }}" autoplay muted playsinline class="w-100 h-100" style="display: {% if s.source_type == 'IP_CAMERA' %}none{% else %}block{% endif %}; object-fit: contain;"></video>
                     <!-- Playback Video (for WHEP/HLS stream watching) -->
-                    <video id="playback-video-{{ s.id }}" autoplay muted playsinline class="w-100 h-100" style="display: {% if s.source_type == 'IP_CAMERA' %}block{% else %}none{% endif %};"></video>
+                    <video id="playback-video-{{ s.id }}" autoplay muted playsinline class="w-100 h-100" style="display: {% if s.source_type == 'IP_CAMERA' %}block{% else %}none{% endif %}; object-fit: contain;"></video>
                     
                     <!-- Status Overlays -->
                     <div class="position-absolute top-2 start-2 bg-dark bg-opacity-75 px-2 py-1 rounded small text-white d-flex align-items-center gap-1.5">
@@ -487,8 +487,8 @@
                     const facing = cameraFacingModes[sourceId] || 'user';
                     stream = await navigator.mediaDevices.getUserMedia({ 
                         video: { 
-                            width: 1280, 
-                            height: 720,
+                            width: { ideal: 1920 },
+                            height: { ideal: 1080 },
                             facingMode: { ideal: facing }
                         }, 
                         audio: audioConstraints 
