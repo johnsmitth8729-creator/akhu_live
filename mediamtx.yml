@@ -260,10 +260,10 @@ pathDefaults:
   recordFormat: fmp4
   recordPartDuration: 1s
   recordMaxPartSize: 50M
-  # 1-minute segments for responsive DVR seek (small enough to be useful)
-  recordSegmentDuration: 1m
-  # Default 10-minute rolling buffer (configurable per deployment)
-  recordDeleteAfter: 10m
+  # 15-second segments for responsive rolling buffer
+  recordSegmentDuration: 15s
+  # 1-minute rolling buffer automatically keeping only the latest 1 minute
+  recordDeleteAfter: 1m
 
   overridePublisher: true
   srtPublishPassphrase:

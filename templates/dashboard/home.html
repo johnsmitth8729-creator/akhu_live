@@ -601,8 +601,8 @@
             {% endfor %}
         {% endfor %}
 
-        // Background Status Polling
-        setInterval(checkStatusesAsync, 15000);
+        // Background Status Polling (every 3 seconds)
+        setInterval(checkStatusesAsync, 3000);
     });
 
     // Capture screenshot from live video canvas
@@ -1213,8 +1213,7 @@
                         
                         if (data.status === 'online') {
                             const player = activePlayers["{{ c.unique_id }}"];
-                            const now = Date.now();
-                            if (!player || (!player.isConnected && (!player.lastFailureTime || (now - player.lastFailureTime > 45000)))) {
+                            if (!player || !player.isConnected) {
                                 if (player) player.destroy();
                                 activePlayers["{{ c.unique_id }}"] = new StreamPlayer(
                                     "{{ c.unique_id }}", 
@@ -1269,8 +1268,7 @@
                             {% endif %}
                             
                             const player = activePlayers["{{ c.unique_id }}"];
-                            const now = Date.now();
-                            if (!player || (!player.isConnected && (!player.lastFailureTime || (now - player.lastFailureTime > 45000)))) {
+                            if (!player || !player.isConnected) {
                                 if (player) player.destroy();
                                 activePlayers["{{ c.unique_id }}"] = new StreamPlayer(
                                     "{{ c.unique_id }}", 
