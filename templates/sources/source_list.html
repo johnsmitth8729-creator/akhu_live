@@ -277,6 +277,27 @@
         }
     }
 
+    function optimizeVideoSender(pc) {
+        try {
+            const senders = pc.getSenders();
+            const videoSender = senders.find(s => s.track && s.track.kind === 'video');
+            if (videoSender) {
+                const parameters = videoSender.getParameters();
+                if (!parameters.encodings) {
+                    parameters.encodings = [{}];
+                }
+                parameters.encodings[0].maxBitrate = 800000; // Cap video bitrate at 800 Kbps
+                videoSender.setParameters(parameters).then(() => {
+                    console.log("Successfully set video maxBitrate to 800 Kbps");
+                }).catch(err => {
+                    console.warn("setParameters failed (negotiation might be incomplete):", err);
+                });
+            }
+        } catch (e) {
+            console.warn("Failed to optimize video sender:", e);
+        }
+    }
+
     // Device Orientation and Resolution handler for dynamic publisher camera adjustment
     let lastOrientation = getDeviceOrientation();
 
@@ -321,7 +342,8 @@
         
         const constraints = {
             width: { ideal: idealWidth },
-            height: { ideal: idealHeight }
+            height: { ideal: idealHeight },
+            frameRate: { ideal: 15, max: 20 }
         };
         
         try {
@@ -339,7 +361,8 @@
                     video: {
                         width: { ideal: idealWidth },
                         height: { ideal: idealHeight },
-                        facingMode: { ideal: facing }
+                        facingMode: { ideal: facing },
+                        frameRate: { ideal: 15, max: 20 }
                     },
                     audio: audioConstraints
                 });
@@ -366,6 +389,7 @@
                     if (audioSender && newAudioTrack) {
                         await audioSender.replaceTrack(newAudioTrack);
                     }
+                    optimizeVideoSender(pc);
                 }
                 
                 // Release old hardware tracks
@@ -643,7 +667,8 @@
                         video: { 
                             width: { ideal: idealWidth },
                             height: { ideal: idealHeight },
-                            facingMode: { ideal: facing }
+                            facingMode: { ideal: facing },
+                            frameRate: { ideal: 15, max: 20 }
                         }, 
                         audio: audioConstraints 
                     });
@@ -807,6 +832,7 @@
                     console.log(`[Source ${sourceId}] Publisher PeerConnection state:`, state);
                     
                     if (state === 'connected') {
+                        optimizeVideoSender(pc);
                         if (publisherReconnectTimers[sourceId]) {
                             console.log(`[Source ${sourceId}] Publisher connection recovered. Clearing reconnect timer.`);
                             clearTimeout(publisherReconnectTimers[sourceId]);
@@ -895,21 +921,14 @@
                 await waitForIceGathering(pc);
                 console.log(`[Source ${sourceId}] ICE gathering completed.`);
 
-                // Filter SDP offer to keep only TCP candidates
                 const sdpOffer = pc.localDescription.sdp;
-                const filteredOffer = sdpOffer.split(/\r?\n/).map(line => {
-                    if (line.startsWith('a=candidate:') && !line.toLowerCase().includes('tcp')) {
-                        return null;
-                    }
-                    return line;
-                }).filter(line => line !== null).join('\r\n');
 
                 console.log(`[Source ${sourceId}] Sending offer SDP to WHIP endpoint...`);
                 
                 const whipRes = await fetch(whipUrl, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/sdp' },
-                    body: filteredOffer
+                    body: sdpOffer
                 });
 
                 if (whipRes.status === 200 || whipRes.status === 201) {
@@ -925,18 +944,11 @@
                     }
 
                     const answerSdp = await whipRes.text();
-                    // Filter SDP answer to keep only TCP candidates
-                    const filteredAnswer = answerSdp.split(/\r?\n/).map(line => {
-                        if (line.startsWith('a=candidate:') && !line.toLowerCase().includes('tcp')) {
-                            return null;
-                        }
-                        return line;
-                    }).filter(line => line !== null).join('\r\n');
 
                     console.log(`[Source ${sourceId}] Setting remote description (Answer SDP)...`);
                     await pc.setRemoteDescription(new RTCSessionDescription({
                         type: 'answer',
-                        sdp: filteredAnswer
+                        sdp: answerSdp
                     }));
 
                     console.log(`[Source ${sourceId}] Registering stream online state with Django...`);
@@ -1265,21 +1277,14 @@
             await waitForIceGathering(pc);
             console.log(`[Source ${sourceId}] Subscriber ICE gathering completed.`);
 
-            // Filter SDP offer to keep only TCP candidates
             const sdpOffer = pc.localDescription.sdp;
-            const filteredOffer = sdpOffer.split(/\r?\n/).map(line => {
-                if (line.startsWith('a=candidate:') && !line.toLowerCase().includes('tcp')) {
-                    return null;
-                }
-                return line;
-            }).filter(line => line !== null).join('\r\n');
 
             console.log(`[Source ${sourceId}] Sending offer to WHEP endpoint:`, whepUrl);
             
             const response = await fetch(whepUrl, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/sdp' },
-                body: filteredOffer
+                body: sdpOffer
             });
             
             if (response.status === 200 || response.status === 201) {
@@ -1293,18 +1298,11 @@
                 }
 
                 const answerSdp = await response.text();
-                // Filter SDP answer to keep only TCP candidates
-                const filteredAnswer = answerSdp.split(/\r?\n/).map(line => {
-                    if (line.startsWith('a=candidate:') && !line.toLowerCase().includes('tcp')) {
-                        return null;
-                    }
-                    return line;
-                }).filter(line => line !== null).join('\r\n');
 
                 console.log(`[Source ${sourceId}] Setting remote description (Answer SDP)...`);
                 await pc.setRemoteDescription(new RTCSessionDescription({
                     type: 'answer',
-                    sdp: filteredAnswer
+                    sdp: answerSdp
                 }));
             } else {
                 const errorText = await response.text();
