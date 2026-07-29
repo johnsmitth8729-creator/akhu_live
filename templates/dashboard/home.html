@@ -242,6 +242,7 @@
             this.reconnectAttempts = 0;
             this.maxReconnectAttempts = 5;
             this.isConnected = false;
+            this.isConnecting = false;
 
             this.lastBytesReceived = 0;
             this.lastFramesDecoded = 0;
@@ -251,6 +252,7 @@
             if (this.videoEl) {
                 this.videoEl.addEventListener('playing', () => {
                     this.isConnected = true;
+                    this.isConnecting = false;
                     this.reconnectAttempts = 0;
                     this.startStats();
                 });
@@ -258,6 +260,8 @@
         }
 
         async start() {
+            if (this.isConnecting || this.isConnected) return;
+            this.isConnecting = true;
             try {
                 await this.connectWebRTC();
             } catch (webrtcError) {
@@ -303,6 +307,7 @@
                     this.connectionTimeout = null;
                 }
                 this.isConnected = true;
+                this.isConnecting = false;
                 this.reconnectAttempts = 0;
             };
 
@@ -315,6 +320,7 @@
                         this.connectionTimeout = null;
                     }
                     this.isConnected = true;
+                    this.isConnecting = false;
                 } else if (state === 'failed' || state === 'disconnected') {
                     this.triggerHlsFallback("PeerConnection state " + state);
                 }
@@ -351,6 +357,7 @@
         triggerHlsFallback(reason) {
             if (this.fallbackTriggered) return;
             this.fallbackTriggered = true;
+            this.isConnecting = false;
             console.warn(`[WHEP ${this.cameraId}] Triggering HLS fallback: ${reason}`);
             
             if (this.connectionTimeout) {
@@ -1212,15 +1219,17 @@
                         badgeText.innerText = data.status.toUpperCase();
                         
                         if (data.status === 'online') {
-                            const player = activePlayers["{{ c.unique_id }}"];
-                            if (!player || !player.isConnected) {
-                                if (player) player.destroy();
-                                activePlayers["{{ c.unique_id }}"] = new StreamPlayer(
+                            let player = activePlayers["{{ c.unique_id }}"];
+                            if (!player) {
+                                player = new StreamPlayer(
                                     "{{ c.unique_id }}", 
                                     resolveDynamicUrl("{{ c.stream_urls.whep }}"), 
                                     resolveDynamicUrl("{{ c.stream_urls.hls }}")
                                 );
-                                activePlayers["{{ c.unique_id }}"].start();
+                                activePlayers["{{ c.unique_id }}"] = player;
+                                player.start();
+                            } else if (!player.isConnected && !player.isConnecting) {
+                                player.start();
                             }
                         } else {
                             if (activePlayers["{{ c.unique_id }}"]) {
@@ -1267,15 +1276,17 @@
                             }
                             {% endif %}
                             
-                            const player = activePlayers["{{ c.unique_id }}"];
-                            if (!player || !player.isConnected) {
-                                if (player) player.destroy();
-                                activePlayers["{{ c.unique_id }}"] = new StreamPlayer(
+                            let player = activePlayers["{{ c.unique_id }}"];
+                            if (!player) {
+                                player = new StreamPlayer(
                                     "{{ c.unique_id }}", 
                                     resolveDynamicUrl("{{ c.stream_urls.whep }}"), 
                                     resolveDynamicUrl("{{ c.stream_urls.hls }}")
                                 );
-                                activePlayers["{{ c.unique_id }}"].start();
+                                activePlayers["{{ c.unique_id }}"] = player;
+                                player.start();
+                            } else if (!player.isConnected && !player.isConnecting) {
+                                player.start();
                             }
                         } else {
                             if (activePlayers["{{ c.unique_id }}"]) {

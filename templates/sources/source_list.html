@@ -839,36 +839,24 @@
                             delete publisherReconnectTimers[sourceId];
                         }
                     } else if (state === 'failed' || state === 'disconnected') {
-                        console.warn(`[Source ${sourceId}] Publisher connection failed/disconnected. Starting 8-second reconnect timer.`);
+                        console.warn(`[Source ${sourceId}] Publisher connection ${state}. Starting auto-reconnect timer.`);
                         if (isStreamingActive[sourceId] && !publisherReconnectTimers[sourceId]) {
-                            publisherReconnectTimers[sourceId] = setTimeout(() => {
-                                console.warn(`[Source ${sourceId}] Publisher reconnect timer expired. Stopping publisher.`);
-                                stopPublisher(sourceId);
-                                
-                                const btn = document.getElementById(`btn-stream-toggle-${sourceId}`);
-                                if (btn) {
-                                    btn.innerHTML = `<i class="fa-solid fa-tower-broadcast me-1"></i> {% translate 'Start Stream' %}`;
-                                    btn.className = 'btn btn-success btn-sm flex-grow-1';
-                                    btn.disabled = false;
-                                }
-
-                                const badge = document.getElementById(`badge-status-${sourceId}`);
-                                if (badge) {
-                                    badge.innerText = 'offline';
-                                    badge.className = 'badge bg-secondary px-2 py-0.5 text-uppercase';
-                                }
-                                const indicator = document.getElementById(`indicator-${sourceId}`);
-                                if (indicator) {
-                                    indicator.className = 'indicator-pulse bg-secondary';
-                                }
-
-                                fetch('/api/stop-stream/', {
-                                    method: 'POST',
-                                    headers: { 'Content-Type': 'application/json', 'X-CSRFToken': '{{ csrf_token }}' },
-                                    body: JSON.stringify({ source_id: sourceId })
-                                }).catch(() => {});
+                            publisherReconnectTimers[sourceId] = setTimeout(async () => {
                                 delete publisherReconnectTimers[sourceId];
-                            }, 8000);
+                                if (isStreamingActive[sourceId]) {
+                                    console.log(`[Source ${sourceId}] Auto-reconnecting WHIP publisher...`);
+                                    try {
+                                        if (publisherPeerConnections[sourceId]) {
+                                            try { publisherPeerConnections[sourceId].close(); } catch(e) {}
+                                            delete publisherPeerConnections[sourceId];
+                                        }
+                                        isStreamingActive[sourceId] = false;
+                                        await toggleWebRTCStreaming(sourceId, streamBaseUrl);
+                                    } catch(recErr) {
+                                        console.error(`[Source ${sourceId}] Auto-reconnect WHIP failed:`, recErr);
+                                    }
+                                }
+                            }, 3000);
                         }
                     } else if (state === 'closed') {
                         if (publisherReconnectTimers[sourceId]) {
