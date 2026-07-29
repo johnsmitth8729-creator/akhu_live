@@ -209,11 +209,11 @@ webrtcIPsFromInterfaces: true
 webrtcIPsFromInterfacesList: []
 webrtcAdditionalHosts: [live.akhu.uz]
 
-webrtcICEServers:
-  - stun:stun.l.google.com:19302
-  - stun:stun1.l.google.com:19302
-  - stun:stun2.l.google.com:19302
-  - stun:stun.services.mozilla.com
+webrtcICEServers2:
+  - url: stun:stun.l.google.com:19302
+  - url: stun:stun1.l.google.com:19302
+  - url: stun:stun2.l.google.com:19302
+  - url: stun:stun.services.mozilla.com
 
 webrtcSTUNGatherTimeout: 5s
 webrtcHandshakeTimeout: 10s
