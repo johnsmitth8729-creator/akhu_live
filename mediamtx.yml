@@ -207,7 +207,7 @@ webrtcLocalUDPAddress: :8189
 webrtcLocalTCPAddress: :8189
 webrtcIPsFromInterfaces: true
 webrtcIPsFromInterfacesList: []
-webrtcAdditionalHosts: [live.akhu.uz]
+webrtcAdditionalHosts: [192.168.1.136, live.akhu.uz]
 
 webrtcICEServers2:
   - url: stun:stun.l.google.com:19302
