@@ -1014,7 +1014,15 @@
                 console.error(`[Source ${sourceId}] Error registering stop-stream:`, err);
             }
 
-            stopPublisher(sourceId);
+            if (publisherPeerConnections[sourceId]) {
+                try { publisherPeerConnections[sourceId].close(); } catch(e) {}
+                delete publisherPeerConnections[sourceId];
+            }
+            if (publisherReconnectTimers[sourceId]) {
+                clearTimeout(publisherReconnectTimers[sourceId]);
+                delete publisherReconnectTimers[sourceId];
+            }
+            isStreamingActive[sourceId] = false;
             
             streamBtn.innerHTML = `<i class="fa-solid fa-tower-broadcast me-1"></i> {% translate 'Start Stream' %}`;
             streamBtn.className = 'btn btn-success btn-sm flex-grow-1';

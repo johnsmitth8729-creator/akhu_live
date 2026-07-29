@@ -348,3 +348,9 @@ pathDefaults:
 
 paths:
   all_others:
+    record: true
+    recordPath: ./recordings/%path/%Y-%m-%d_%H-%M-%S-%f
+    recordFormat: fmp4
+    recordPartDuration: 1s
+    recordSegmentDuration: 5s
+    recordDeleteAfter: 1m
