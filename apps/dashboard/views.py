@@ -98,7 +98,7 @@ class HomeView(TemplateView):
             hls_base = get_dynamic_url(getattr(settings, 'MEDIAMTX_HLS_URL', 'http://127.0.0.1:8888'))
             webrtc_base = get_dynamic_url(getattr(settings, 'MEDIAMTX_WEBRTC_URL', 'http://127.0.0.1:8889'))
             stun_url = 'stun:stun.l.google.com:19302'
-            turn_url = 'turn:live.akhu.uz:3478?transport=udp'
+            turn_url = ''
 
         context['stun_url'] = stun_url
         context['turn_url'] = turn_url

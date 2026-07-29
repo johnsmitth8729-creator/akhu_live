@@ -64,7 +64,7 @@ class LiveSourceListView(SourceQuerysetMixin, ListView):
             context['mediamtx_webrtc_url'] = get_dynamic_url(getattr(settings, 'MEDIAMTX_WEBRTC_URL', 'http://127.0.0.1:8889'))
             context['mediamtx_hls_url'] = get_dynamic_url(getattr(settings, 'MEDIAMTX_HLS_URL', 'http://127.0.0.1:8888'))
             context['stun_url'] = 'stun:stun.l.google.com:19302'
-            context['turn_url'] = 'turn:live.akhu.uz:3478?transport=udp'
+            context['turn_url'] = ''
             
         return context
 

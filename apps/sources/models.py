@@ -123,7 +123,7 @@ class StreamingSetting(models.Model):
     mediamtx_webrtc_url = models.CharField(max_length=255, default='http://127.0.0.1:8889', verbose_name=_('MediaMTX WebRTC URL'))
     mediamtx_hls_url = models.CharField(max_length=255, default='http://127.0.0.1:8888', verbose_name=_('MediaMTX HLS URL'))
     mediamtx_playback_url = models.CharField(max_length=255, default='http://127.0.0.1:9996', verbose_name=_('MediaMTX Playback URL'))
-    turn_url = models.CharField(max_length=255, default='turn:live.akhu.uz:3478?transport=udp', verbose_name=_('TURN Server URL'))
+    turn_url = models.CharField(max_length=255, default='', blank=True, verbose_name=_('TURN Server URL'))
     stun_url = models.CharField(max_length=255, default='stun:stun.l.google.com:19302', verbose_name=_('STUN Server URL'))
     domain = models.CharField(max_length=100, default='live.akhu.uz', verbose_name=_('Production Domain'))
     https_enabled = models.BooleanField(default=True, verbose_name=_('HTTPS Enabled'))

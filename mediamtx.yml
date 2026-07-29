@@ -209,12 +209,11 @@ webrtcIPsFromInterfaces: true
 webrtcIPsFromInterfacesList: []
 webrtcAdditionalHosts: [live.akhu.uz]
 
-# Dynamic ICE servers configuration for public routing
-webrtcICEServers2:
+webrtcICEServers:
   - url: stun:stun.l.google.com:19302
-  - url: turn:live.akhu.uz:3478?transport=udp
-    username: username
-    password: password
+  - url: stun:stun1.l.google.com:19302
+  - url: stun:stun2.l.google.com:19302
+  - url: stun:stun.services.mozilla.com
 
 webrtcSTUNGatherTimeout: 5s
 webrtcHandshakeTimeout: 10s
