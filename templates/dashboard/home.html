@@ -865,7 +865,7 @@
                 }
             }
 
-            const segmentStartIso = selectedSegment.start;
+            const segmentStartIso = new Date(selectedSegment.start).toISOString();
             const segmentDurationSec = selectedSegment.duration || 600;
             const segStartMs = new Date(segmentStartIso).getTime();
 
