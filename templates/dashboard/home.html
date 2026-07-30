@@ -875,6 +875,10 @@
             }
             computedLocalSeek = Math.min(Math.max(0, computedLocalSeek), Math.max(0, segmentDurationSec - 0.5));
 
+            const requestedOffsetSec = Math.abs(offsetSeconds);
+            console.log(`[Button] -${requestedOffsetSec} sec clicked`);
+            console.log("[PlaybackClock]", this.clock.getTime());
+            console.log("[Target Time]", targetTime);
             console.log("segmentStart:", segmentStartIso);
             console.log("segmentDuration:", segmentDurationSec);
             console.log("requestedOffset:", requestedOffsetSec);
@@ -882,11 +886,13 @@
             console.log("video.currentTime:", this.videoEl ? this.videoEl.currentTime : 0);
 
             const mediaUrl = this.provider.getStreamUrl(this.streamId, segmentStartIso, segmentDurationSec);
+            console.log("[PlaybackProvider] GET URL:", mediaUrl);
             console.log(`[ReqID: ${requestId}] [DVREngine LOG] Final Playback URL sent to MediaMTX: ${mediaUrl}`);
 
             this.stateMachine.setState(DVRState.BUFFERING, { mediaUrl, computedLocalSeek });
             await this.dvrMediaSource.loadStream(mediaUrl, computedLocalSeek);
             this.stateMachine.setState(DVRState.PLAYBACK);
+            console.log("[Playback Started]");
         }
 
         stop() {
@@ -1057,7 +1063,10 @@
 
                 // Subscribe to timeline events
                 this.dvrEngine.eventBus.on('SEEK_REQUEST', ({ timestampMs }) => {
-                    const offsetSec = (Date.now() - timestampMs) / 1000;
+                    console.log("[DVREventBus] SEEK_REQUEST emitted, timestampMs:", timestampMs);
+                    console.log("[DVREngine] SEEK_REQUEST received");
+                    const currentLiveMs = (this.dvrEngine && this.dvrEngine.clock) ? this.dvrEngine.clock.getCurrentTime() : Date.now();
+                    const offsetSec = (currentLiveMs - timestampMs) / 1000;
                     this.shiftDVR(offsetSec);
                 });
 
