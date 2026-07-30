@@ -1273,16 +1273,14 @@
                         }
                     })
                     .catch(err => {
-                        console.error(err);
-                        const cardCol = document.getElementById(`col-camera-{{ c.unique_id }}`);
-                        if (cardCol) cardCol.remove();
+                        console.warn(`[Status Check] Failed to update status for {{ c.unique_id }}:`, err);
                     });
                 }
                 {% else %}
                 if (document.getElementById(`col-camera-{{ c.unique_id }}`)) {
                     fetch(`/api/live-sources/{{ c.id }}/`)
                     .then(response => {
-                        if (!response.ok) throw new Error("Source deleted");
+                        if (!response.ok) throw new Error("Source status check error");
                         return response.json();
                     })
                     .then(data => {
@@ -1330,9 +1328,7 @@
                         }
                     })
                     .catch(err => {
-                        console.error(err);
-                        const cardCol = document.getElementById(`col-camera-{{ c.unique_id }}`);
-                        if (cardCol) cardCol.remove();
+                        console.warn(`[Status Check] Failed to update status for {{ c.unique_id }}:`, err);
                     });
                 }
                 {% endif %}
