@@ -435,30 +435,32 @@
         return new Promise((resolve) => {
             if (pc.iceGatheringState === 'complete') {
                 resolve();
-            } else {
-                function checkState() {
-                    if (pc.iceGatheringState === 'complete') {
-                        pc.removeEventListener('icecandidate', onIceCandidate);
-                        pc.removeEventListener('icegatheringstatechange', checkState);
-                        resolve();
-                    }
-                }
-                function onIceCandidate(event) {
-                    if (!event.candidate) {
-                        pc.removeEventListener('icecandidate', onIceCandidate);
-                        pc.removeEventListener('icegatheringstatechange', checkState);
-                        resolve();
-                    }
-                }
-                pc.addEventListener('icecandidate', onIceCandidate);
-                pc.addEventListener('icegatheringstatechange', checkState);
-                
-                setTimeout(() => {
-                    pc.removeEventListener('icecandidate', onIceCandidate);
+                return;
+            }
+            let resolved = false;
+            const cleanupAndResolve = () => {
+                if (!resolved) {
+                    resolved = true;
+                    pc.removeEventListener('icecandidate', onCandidate);
                     pc.removeEventListener('icegatheringstatechange', checkState);
                     resolve();
-                }, 2000);
+                }
+            };
+            function checkState() {
+                if (pc.iceGatheringState === 'complete') {
+                    cleanupAndResolve();
+                }
             }
+            function onCandidate(event) {
+                if (event.candidate) {
+                    setTimeout(cleanupAndResolve, 50);
+                } else {
+                    cleanupAndResolve();
+                }
+            }
+            pc.addEventListener('icecandidate', onCandidate);
+            pc.addEventListener('icegatheringstatechange', checkState);
+            setTimeout(cleanupAndResolve, 300);
         });
     }
 

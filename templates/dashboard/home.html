@@ -543,30 +543,32 @@
         return new Promise((resolve) => {
             if (pc.iceGatheringState === 'complete') {
                 resolve();
-            } else {
-                function checkState() {
-                    if (pc.iceGatheringState === 'complete') {
-                        pc.removeEventListener('icecandidate', onIceCandidate);
-                        pc.removeEventListener('icegatheringstatechange', checkState);
-                        resolve();
-                    }
-                }
-                function onIceCandidate(event) {
-                    if (!event.candidate) {
-                        pc.removeEventListener('icecandidate', onIceCandidate);
-                        pc.removeEventListener('icegatheringstatechange', checkState);
-                        resolve();
-                    }
-                }
-                pc.addEventListener('icecandidate', onIceCandidate);
-                pc.addEventListener('icegatheringstatechange', checkState);
-                
-                setTimeout(() => {
-                    pc.removeEventListener('icecandidate', onIceCandidate);
+                return;
+            }
+            let resolved = false;
+            const cleanupAndResolve = () => {
+                if (!resolved) {
+                    resolved = true;
+                    pc.removeEventListener('icecandidate', onCandidate);
                     pc.removeEventListener('icegatheringstatechange', checkState);
                     resolve();
-                }, 2000);
+                }
+            };
+            function checkState() {
+                if (pc.iceGatheringState === 'complete') {
+                    cleanupAndResolve();
+                }
             }
+            function onCandidate(event) {
+                if (event.candidate) {
+                    setTimeout(cleanupAndResolve, 50);
+                } else {
+                    cleanupAndResolve();
+                }
+            }
+            pc.addEventListener('icecandidate', onCandidate);
+            pc.addEventListener('icegatheringstatechange', checkState);
+            setTimeout(cleanupAndResolve, 300);
         });
     }
 
@@ -792,49 +794,85 @@
         constructor(videoEl, streamId) {
             this.videoEl = videoEl;
             this.streamId = streamId;
+            this.loadedHandler = null;
         }
 
         async loadOffset(offsetSeconds) {
             this.stop();
             const targetTime = Date.now() - (Math.abs(offsetSeconds) * 1000);
             let selectedIso = null;
+            let segStartMs = targetTime;
+            let hasRecordedSegments = false;
 
             try {
                 const listRes = await fetch(`/api/dvr/${this.streamId}/list/`);
                 if (listRes.ok) {
                     const segments = await listRes.json();
                     if (Array.isArray(segments) && segments.length > 0) {
+                        hasRecordedSegments = true;
                         let bestSegment = segments[0];
-                        let minDiff = Math.abs(new Date(segments[0].start).getTime() - targetTime);
+                        let minDiff = Infinity;
 
-                        for (let i = 1; i < segments.length; i++) {
-                            const segTime = new Date(segments[i].start).getTime();
-                            const diff = Math.abs(segTime - targetTime);
+                        for (let i = 0; i < segments.length; i++) {
+                            const startTime = new Date(segments[i].start).getTime();
+                            const durationMs = (segments[i].duration || 60) * 1000;
+                            const endTime = startTime + durationMs;
+
+                            if (targetTime >= startTime && targetTime <= endTime) {
+                                bestSegment = segments[i];
+                                minDiff = 0;
+                                break;
+                            }
+                            
+                            const diff = Math.abs(startTime - targetTime);
                             if (diff < minDiff) {
                                 minDiff = diff;
                                 bestSegment = segments[i];
                             }
                         }
                         selectedIso = bestSegment.start;
+                        segStartMs = new Date(bestSegment.start).getTime();
                     }
                 }
             } catch (err) {
                 console.warn("Error fetching DVR segment list:", err);
             }
 
-            if (!selectedIso) {
-                selectedIso = new Date(targetTime).toISOString();
+            if (!hasRecordedSegments) {
+                console.warn(`[DVREngine ${this.streamId}] No recorded DVR segments available yet for offset -${offsetSeconds}s.`);
+                alert("{% translate 'DVR recording is initializing. Please wait a few seconds and try again.' %}");
+                switchToLive();
+                return;
             }
 
-            console.log(`[DVREngine ${this.streamId}] Loading offset -${offsetSeconds}s with start timestamp: ${selectedIso}`);
-            this.videoEl.src = `/api/dvr/${this.streamId}/get/?start=${encodeURIComponent(selectedIso)}&duration=60&format=fmp4`;
+            const seekSeconds = Math.max(0, (targetTime - segStartMs) / 1000);
+            console.log(`[DVREngine ${this.streamId}] Loading offset -${offsetSeconds}s (Start: ${selectedIso}, Seek: ${seekSeconds.toFixed(1)}s)`);
+            
+            const mediaUrl = `/api/dvr/${this.streamId}/get/?start=${encodeURIComponent(selectedIso)}&duration=60&format=fmp4`;
+            
+            this.loadedHandler = () => {
+                if (this.loadedHandler) {
+                    this.videoEl.removeEventListener('loadedmetadata', this.loadedHandler);
+                    this.loadedHandler = null;
+                }
+                if (seekSeconds > 0 && this.videoEl.duration && seekSeconds < this.videoEl.duration) {
+                    this.videoEl.currentTime = seekSeconds;
+                }
+                this.videoEl.play().catch(e => {
+                    console.warn("DVR Playback failed:", e);
+                });
+            };
+
+            this.videoEl.addEventListener('loadedmetadata', this.loadedHandler);
+            this.videoEl.src = mediaUrl;
             this.videoEl.load();
-            this.videoEl.play().catch(e => {
-                console.warn("DVR Playback failed or was paused by user:", e);
-            });
         }
 
         stop() {
+            if (this.loadedHandler) {
+                this.videoEl.removeEventListener('loadedmetadata', this.loadedHandler);
+                this.loadedHandler = null;
+            }
             this.videoEl.pause();
             this.videoEl.removeAttribute('src');
             this.videoEl.load();
