@@ -865,7 +865,10 @@
                 }
             }
 
-            const segmentStartIso = new Date(selectedSegment.start).toISOString();
+            // CRITICAL: Pass the raw segment start string from MediaMTX /list response.
+            // MediaMTX stores segments with +05:00 timezone and only accepts that format on /get.
+            // Converting to UTC 'Z' format causes HTTP 404 "no recording segments found".
+            const segmentStartIso = selectedSegment.start;
             const segmentDurationSec = selectedSegment.duration || 600;
             const segStartMs = new Date(segmentStartIso).getTime();
 
