@@ -1136,11 +1136,17 @@
         }
 
         formatTimeLabel(seconds) {
-            if (seconds < 60) {
-                return `${seconds}s`;
+            const sec = Math.abs(Math.round(seconds));
+            if (sec < 60) {
+                return `${sec}s`;
+            } else if (sec < 3600) {
+                const mins = Math.floor(sec / 60);
+                const rSec = sec % 60;
+                return rSec > 0 ? `${mins}m ${rSec}s` : `${mins}m`;
             } else {
-                const mins = Math.floor(seconds / 60);
-                return `${mins}m`;
+                const hours = Math.floor(sec / 3600);
+                const mins = Math.floor((sec % 3600) / 60);
+                return mins > 0 ? `${hours}h ${mins}m` : `${hours}h`;
             }
         }
 

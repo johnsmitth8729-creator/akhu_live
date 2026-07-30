@@ -132,10 +132,18 @@ class CanvasRenderer {
             }
         });
 
-        // 4. Time Ticks & Scale Labels
+        // 4. Time Ticks & Scale Labels (Asia/Tashkent Timezone)
         ctx.fillStyle = '#64748b';
         ctx.font = '10px sans-serif';
         ctx.textAlign = 'center';
+
+        const timeFormatter = new Intl.DateTimeFormat('en-GB', {
+            timeZone: 'Asia/Tashkent',
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit',
+            hour12: false
+        });
 
         const windowSec = this.model.getZoomWindowSec();
         let tickIntervalSec = 300;
@@ -155,7 +163,7 @@ class CanvasRenderer {
             ctx.stroke();
 
             const d = new Date(t);
-            const timeStr = d.toTimeString().split(' ')[0];
+            const timeStr = timeFormatter.format(d);
             ctx.fillText(timeStr, x, 14);
         }
 
@@ -177,7 +185,7 @@ class CanvasRenderer {
             ctx.fill();
         }
 
-        // 6. Hover Marker Cursor
+        // 6. Hover Marker Cursor (Asia/Tashkent Timezone)
         if (this.hoverX !== null && this.hoverTimestampMs) {
             ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
             ctx.lineWidth = 1;
@@ -189,10 +197,10 @@ class CanvasRenderer {
             ctx.setLineDash([]);
 
             const hoverDate = new Date(this.hoverTimestampMs);
-            const hoverStr = hoverDate.toTimeString().split(' ')[0];
+            const hoverStr = timeFormatter.format(hoverDate);
 
             ctx.fillStyle = 'rgba(15, 23, 42, 0.9)';
-            ctx.fillRect(this.hoverX - 25, height - 16, 50, 14);
+            ctx.fillRect(this.hoverX - 28, height - 16, 56, 14);
             ctx.fillStyle = '#38bdf8';
             ctx.font = '10px sans-serif';
             ctx.textAlign = 'center';
