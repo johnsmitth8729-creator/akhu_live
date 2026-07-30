@@ -1,10 +1,13 @@
-import shutil
+import logging
+import requests
 from django.shortcuts import render, redirect
+from django.views import View
 from django.views.generic import TemplateView, ListView
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.utils.translation import gettext_lazy as _
 from django.conf import settings
 from django.urls import reverse
+from django.http import JsonResponse, StreamingHttpResponse, HttpResponse
 from core.permissions import SuperAdminRequiredMixin, RegionAdminRequiredMixin
 from regions.models import Region
 from cameras.models import Camera, CameraStatus
@@ -12,6 +15,8 @@ from logs.models import ActivityLog
 from streaming.models import StreamingLog
 from streaming.services import MediaMTXService
 from sources.models import LiveSource, Recording, StreamingSetting
+
+logger = logging.getLogger(__name__)
 
 class HomeView(TemplateView):
     """
@@ -302,26 +307,65 @@ class DVRListView(View):
 
 class DVRGetView(View):
     """
-    Proxy/Redirect to MediaMTX Playback Get API.
-    Returns or redirects to the requested fmp4 video segment slice.
+    Django Streaming Proxy to MediaMTX Playback Get API.
+    Streams requested fmp4 video segment slice directly without 302 redirects.
     """
     def get(self, request, stream_id):
         start = request.GET.get('start', '')
-        duration = request.GET.get('duration', '600')  # Default 10 minutes
+        duration = request.GET.get('duration', '600')
         fmt = request.GET.get('format', 'fmp4')
+
+        playback_url = f"http://127.0.0.1:9996/get?path={stream_id}&start={start}&duration={duration}&format={fmt}"
         
-        request_host = request.get_host().split(':')[0]
-        is_prod = not getattr(settings, 'DEBUG', False) or (not request_host.replace('.', '').isdigit() and request_host != 'localhost')
-        
-        if is_prod:
-            # Production: Use Nginx proxy path directly for high-performance direct file streaming
-            redirect_url = f"/playback/get?path={stream_id}&start={start}&duration={duration}&format={fmt}"
-        else:
-            db_settings = StreamingSetting.objects.first()
-            playback_base = db_settings.mediamtx_playback_url if db_settings else "http://127.0.0.1:9996"
-            if '127.0.0.1' in playback_base or 'localhost' in playback_base:
-                playback_base = playback_base.replace('127.0.0.1', request_host).replace('localhost', request_host)
-            redirect_url = f"{playback_base}/get?path={stream_id}&start={start}&duration={duration}&format={fmt}"
-            
-        return redirect(redirect_url)
+        logger.info(f"[DVR Proxy] Incoming request for stream {stream_id} (start: {start}, duration: {duration})")
+        logger.info(f"[DVR Proxy] Upstream URL: {playback_url}")
+        print(f"[DVR Proxy] Incoming request for stream {stream_id} (start: {start}, duration: {duration})")
+        print(f"[DVR Proxy] Upstream URL: {playback_url}")
+
+        try:
+            upstream = requests.get(playback_url, stream=True, timeout=(5, 120))
+            logger.info(f"[DVR Proxy] Upstream status: {upstream.status_code}")
+            logger.info(f"[DVR Proxy] Content-Type: {upstream.headers.get('Content-Type')}")
+            print(f"[DVR Proxy] Upstream status: {upstream.status_code}, Content-Type: {upstream.headers.get('Content-Type')}")
+
+            if upstream.status_code != 200:
+                return HttpResponse(
+                    upstream.content,
+                    status=upstream.status_code,
+                    content_type=upstream.headers.get('Content-Type', 'text/plain')
+                )
+
+            logger.info("[DVR Proxy] Streaming started")
+            print("[DVR Proxy] Streaming started")
+
+            def stream_generator():
+                try:
+                    for chunk in upstream.iter_content(chunk_size=65536):
+                        if chunk:
+                            yield chunk
+                    logger.info("[DVR Proxy] Streaming finished")
+                    print("[DVR Proxy] Streaming finished")
+                except Exception as stream_err:
+                    logger.error(f"[DVR Proxy] Streaming error: {stream_err}")
+                    print(f"[DVR Proxy] Streaming error: {stream_err}")
+
+            response = StreamingHttpResponse(
+                stream_generator(),
+                status=200,
+                content_type=upstream.headers.get('Content-Type', 'video/mp4')
+            )
+
+            # Forward headers if present
+            for header in ['Content-Length', 'Accept-Ranges', 'ETag', 'Last-Modified']:
+                if header in upstream.headers:
+                    response[header] = upstream.headers[header]
+
+            response['Cache-Control'] = 'no-cache'
+            response['Access-Control-Allow-Origin'] = '*'
+            return response
+
+        except Exception as e:
+            logger.error(f"[DVR Proxy] Upstream fetch failed: {e}")
+            print(f"[DVR Proxy] Upstream fetch failed: {e}")
+            return HttpResponse(str(e), status=502, content_type='text/plain')
 
