@@ -546,29 +546,23 @@
                 return;
             }
             let resolved = false;
-            const cleanupAndResolve = () => {
+            const done = () => {
                 if (!resolved) {
                     resolved = true;
-                    pc.removeEventListener('icecandidate', onCandidate);
                     pc.removeEventListener('icegatheringstatechange', checkState);
+                    pc.removeEventListener('icecandidate', checkCandidate);
                     resolve();
                 }
             };
             function checkState() {
-                if (pc.iceGatheringState === 'complete') {
-                    cleanupAndResolve();
-                }
+                if (pc.iceGatheringState === 'complete') done();
             }
-            function onCandidate(event) {
-                if (event.candidate) {
-                    setTimeout(cleanupAndResolve, 50);
-                } else {
-                    cleanupAndResolve();
-                }
+            function checkCandidate(e) {
+                if (!e.candidate) done();
             }
-            pc.addEventListener('icecandidate', onCandidate);
             pc.addEventListener('icegatheringstatechange', checkState);
-            setTimeout(cleanupAndResolve, 300);
+            pc.addEventListener('icecandidate', checkCandidate);
+            setTimeout(done, 500);
         });
     }
 
@@ -655,11 +649,18 @@
         async start() {
             this.stop();
             const gridVideo = document.getElementById(`video-${this.streamId}`);
-            if (gridVideo && gridVideo.srcObject && gridVideo.srcObject.active) {
-                console.log(`[LiveEngine ${this.streamId}] Attaching active stream from grid card.`);
-                this.videoEl.srcObject = gridVideo.srcObject;
-                this.videoEl.play().catch(() => {});
-                return;
+            if (gridVideo) {
+                if (gridVideo.srcObject && gridVideo.srcObject.active) {
+                    console.log(`[LiveEngine ${this.streamId}] Instantly attaching MediaStream from grid card.`);
+                    this.videoEl.srcObject = gridVideo.srcObject;
+                    this.videoEl.play().catch(() => {});
+                    return;
+                } else if (gridVideo.src && gridVideo.src.length > 0) {
+                    console.log(`[LiveEngine ${this.streamId}] Instantly attaching video src from grid card.`);
+                    this.videoEl.src = gridVideo.src;
+                    this.videoEl.play().catch(() => {});
+                    return;
+                }
             }
 
             try {
