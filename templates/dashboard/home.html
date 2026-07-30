@@ -860,16 +860,37 @@
             const mediaUrl = `/api/dvr/${this.streamId}/get/?start=${encodeURIComponent(selectedIso)}&duration=600&format=fmp4`;
             console.log(`[DVREngine LOG] Final Playback URL: ${mediaUrl} (Selected Segment Start: ${selectedIso})`);
 
-            if ('MediaSource' in window && typeof MediaSource.isTypeSupported === 'function' && MediaSource.isTypeSupported('video/mp4; codecs="avc1.42E01E, mp4a.40.2"')) {
+            // Runtime MediaSource MIME Type Detection
+            const candidateMimes = [
+                'video/mp4; codecs="avc1.42E01E,opus"',
+                'video/mp4; codecs="avc1.42E01E, opus"',
+                'video/mp4; codecs="avc1.42E01E"',
+                'video/mp4'
+            ];
+
+            let selectedMime = null;
+            if ('MediaSource' in window && typeof MediaSource.isTypeSupported === 'function') {
+                for (const mimeCandidate of candidateMimes) {
+                    const isSupp = MediaSource.isTypeSupported(mimeCandidate);
+                    console.log(`[DVREngine LOG] MediaSource.isTypeSupported('${mimeCandidate}'): ${isSupp}`);
+                    if (isSupp && !selectedMime) {
+                        selectedMime = mimeCandidate;
+                    }
+                }
+            }
+
+            if (selectedMime) {
+                console.log(`[DVREngine LOG] Selected MIME Type: ${selectedMime}. Initializing MediaSource.`);
                 this.mediaSource = new MediaSource();
-                console.log("[DVREngine LOG] MediaSource created. Attaching objectURL to video.src.");
                 
                 this.mediaSource.addEventListener('sourceopen', async () => {
                     console.log(`[DVREngine LOG] MediaSource sourceopen event fired. readyState=${this.mediaSource.readyState}`);
                     try {
-                        const mime = 'video/mp4; codecs="avc1.42E01E, mp4a.40.2"';
-                        this.sourceBuffer = this.mediaSource.addSourceBuffer(mime);
+                        console.log(`[DVREngine LOG] Creating SourceBuffer with MIME: ${selectedMime}`);
+                        this.sourceBuffer = this.mediaSource.addSourceBuffer(selectedMime);
                         this.sourceBuffer.mode = 'segments';
+                        console.log("[DVREngine LOG] SourceBuffer creation SUCCESS!");
+                        
                         this.abortController = new AbortController();
 
                         console.log(`[DVREngine LOG] Fetching fmp4 stream chunks from ${mediaUrl}...`);
@@ -895,11 +916,18 @@
                                 totalBytes += value.byteLength;
                                 console.log(`[DVREngine LOG] Read chunk: ${value.byteLength} bytes (Total: ${totalBytes} bytes)`);
 
-                                if (this.sourceBuffer && !this.sourceBuffer.updating) {
-                                    this.sourceBuffer.appendBuffer(value);
-                                } else if (this.sourceBuffer) {
-                                    await new Promise(r => this.sourceBuffer.addEventListener('updateend', r, { once: true }));
-                                    if (this.sourceBuffer) this.sourceBuffer.appendBuffer(value);
+                                try {
+                                    if (this.sourceBuffer && !this.sourceBuffer.updating) {
+                                        this.sourceBuffer.appendBuffer(value);
+                                    } else if (this.sourceBuffer) {
+                                        await new Promise(r => this.sourceBuffer.addEventListener('updateend', r, { once: true }));
+                                        if (this.sourceBuffer) this.sourceBuffer.appendBuffer(value);
+                                    }
+                                } catch (appErr) {
+                                    console.error("[DVREngine LOG] appendBuffer() EXCEPTION:", appErr);
+                                    if (this.videoEl && this.videoEl.error) {
+                                        console.error(`[DVREngine LOG] video.error.code=${this.videoEl.error.code}, message=${this.videoEl.error.message}`);
+                                    }
                                 }
 
                                 if (this.videoEl.paused) {
@@ -911,14 +939,14 @@
                                 appendChunk();
                             } catch (e) {
                                 if (e.name !== 'AbortError') {
-                                    console.error("[DVREngine LOG] MSE append chunk error:", e);
+                                    console.error("[DVREngine LOG] MSE append chunk loop error:", e);
                                 }
                             }
                         };
 
                         appendChunk();
                     } catch (e) {
-                        console.error("[DVREngine LOG] MSE playback initialization failed:", e);
+                        console.error("[DVREngine LOG] SourceBuffer creation or playback initialization FAILED:", e);
                         console.log("[DVREngine LOG] Fallback: setting video.src directly to mediaUrl.");
                         this.videoEl.src = mediaUrl;
                         this.videoEl.play().catch(() => {});
@@ -927,7 +955,7 @@
 
                 this.videoEl.src = URL.createObjectURL(this.mediaSource);
             } else {
-                console.log("[DVREngine LOG] MediaSource not supported or codec unsupported. Direct video.src fallback.");
+                console.log("[DVREngine LOG] MediaSource not supported or no matching MIME candidate supported. Direct video.src fallback.");
                 this.videoEl.src = mediaUrl;
                 this.videoEl.play().catch(() => {});
             }
