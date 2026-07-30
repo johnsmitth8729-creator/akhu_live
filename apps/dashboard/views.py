@@ -1,3 +1,5 @@
+from zoneinfo import ZoneInfo
+from django.utils import timezone
 import logging
 import requests
 from django.shortcuts import render, redirect
@@ -310,7 +312,7 @@ class DVRServerTimeView(View):
     Returns current authoritative server time in Asia/Tashkent (UTC+5) for frontend clock sync.
     """
     def get(self, request):
-        now_tashkent = timezone.now().astimezone(pytz.timezone('Asia/Tashkent'))
+        now_tashkent = timezone.now().astimezone(ZoneInfo('Asia/Tashkent'))
         return JsonResponse({
             'status': 'success',
             'server_time_iso': now_tashkent.isoformat(),
