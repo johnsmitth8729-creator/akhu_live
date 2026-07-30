@@ -260,10 +260,10 @@ pathDefaults:
   recordFormat: fmp4
   recordPartDuration: 1s
   recordMaxPartSize: 50M
-  # 15-second segments for responsive rolling buffer
-  recordSegmentDuration: 15s
-  # 1-minute rolling buffer automatically keeping only the latest 1 minute
-  recordDeleteAfter: 1m
+  # 5-second segments for responsive rolling buffer
+  recordSegmentDuration: 5s
+  # 10-minute rolling buffer automatically keeping only the latest 10 minutes
+  recordDeleteAfter: 10m
 
   overridePublisher: true
   srtPublishPassphrase:
@@ -353,4 +353,4 @@ paths:
     recordFormat: fmp4
     recordPartDuration: 1s
     recordSegmentDuration: 5s
-    recordDeleteAfter: 1m
+    recordDeleteAfter: 10m
