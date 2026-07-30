@@ -137,14 +137,6 @@ class CanvasRenderer {
         ctx.font = '10px sans-serif';
         ctx.textAlign = 'center';
 
-        const timeFormatter = new Intl.DateTimeFormat('en-GB', {
-            timeZone: 'Asia/Tashkent',
-            hour: '2-digit',
-            minute: '2-digit',
-            second: '2-digit',
-            hour12: false
-        });
-
         const windowSec = this.model.getZoomWindowSec();
         let tickIntervalSec = 300;
         if (windowSec <= 60) tickIntervalSec = 10;
@@ -163,7 +155,7 @@ class CanvasRenderer {
             ctx.stroke();
 
             const d = new Date(t);
-            const timeStr = timeFormatter.format(d);
+            const timeStr = typeof formatUzbekistanTime === 'function' ? formatUzbekistanTime(d, 'time') : d.toTimeString().split(' ')[0];
             ctx.fillText(timeStr, x, 14);
         }
 
@@ -185,7 +177,7 @@ class CanvasRenderer {
             ctx.fill();
         }
 
-        // 6. Hover Marker Cursor (Asia/Tashkent Timezone)
+        // 6. Hover Marker Cursor (Asia/Tashkent Timezone Tooltip: YYYY-MM-DD HH:mm:ss (+05:00))
         if (this.hoverX !== null && this.hoverTimestampMs) {
             ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
             ctx.lineWidth = 1;
@@ -197,14 +189,19 @@ class CanvasRenderer {
             ctx.setLineDash([]);
 
             const hoverDate = new Date(this.hoverTimestampMs);
-            const hoverStr = timeFormatter.format(hoverDate);
+            const hoverStr = typeof formatUzbekistanTime === 'function' ? formatUzbekistanTime(hoverDate, 'tooltip') : hoverDate.toTimeString().split(' ')[0];
 
-            ctx.fillStyle = 'rgba(15, 23, 42, 0.9)';
-            ctx.fillRect(this.hoverX - 28, height - 16, 56, 14);
+            ctx.fillStyle = 'rgba(15, 23, 42, 0.95)';
+            const tooltipWidth = 145;
+            const tooltipX = Math.max(5, Math.min(width - tooltipWidth - 5, this.hoverX - (tooltipWidth / 2)));
+            ctx.fillRect(tooltipX, height - 18, tooltipWidth, 16);
+            ctx.strokeStyle = 'rgba(56, 189, 248, 0.5)';
+            ctx.strokeRect(tooltipX, height - 18, tooltipWidth, 16);
+
             ctx.fillStyle = '#38bdf8';
-            ctx.font = '10px sans-serif';
+            ctx.font = '9px sans-serif';
             ctx.textAlign = 'center';
-            ctx.fillText(hoverStr, this.hoverX, height - 5);
+            ctx.fillText(hoverStr, tooltipX + (tooltipWidth / 2), height - 6);
         }
     }
 }

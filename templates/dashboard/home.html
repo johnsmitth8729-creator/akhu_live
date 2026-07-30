@@ -189,7 +189,12 @@
             
             <div class="modal-body p-0">
                 <!-- Dual Engine Viewports Wrapper -->
-                <div class="vms-video-viewport" id="vmsVideoViewport">
+                <div class="vms-video-viewport position-relative" id="vmsVideoViewport">
+                    <!-- Real-Time Playback Timestamp Overlay (Asia/Tashkent UTC+5) -->
+                    <div class="position-absolute top-0 end-0 m-3 px-2.5 py-1 rounded bg-dark bg-opacity-75 border border-secondary border-opacity-25 text-white font-monospace shadow" style="z-index: 10; font-size: 0.75rem;" id="playerTimestampOverlay">
+                        <i class="fa-regular fa-clock me-1.5 text-info"></i>
+                        <span id="playerTimestampText">--:--:--</span>
+                    </div>
                     <!-- Engine 1: LIVE (WebRTC WHEP / Fallback HLS) -->
                     <div class="vms-engine engine-active" id="liveEngine">
                         <video id="playerLiveVideo" controls autoplay muted playsinline class="w-100 h-100 bg-black"></video>
@@ -1061,6 +1066,19 @@
                 });
             }
 
+            // Start Playback Timestamp Overlay Timer (Asia/Tashkent UTC+5)
+            if (this.timestampTimer) clearInterval(this.timestampTimer);
+            this.timestampTimer = setInterval(() => {
+                const textEl = document.getElementById('playerTimestampText');
+                if (textEl && typeof formatUzbekistanTime === 'function') {
+                    let currentMs = Date.now();
+                    if (this.mode === 'dvr' && this.dvrEngine && this.dvrEngine.clock) {
+                        currentMs = this.dvrEngine.clock.getTime();
+                    }
+                    textEl.innerText = formatUzbekistanTime(currentMs, 'tooltip');
+                }
+            }, 200);
+
             if (!this.bootstrapModal) {
                 this.bootstrapModal = new bootstrap.Modal(this.modalEl);
             }
@@ -1151,6 +1169,10 @@
         }
 
         destroy() {
+            if (this.timestampTimer) {
+                clearInterval(this.timestampTimer);
+                this.timestampTimer = null;
+            }
             if (this.liveEngine) {
                 this.liveEngine.stop();
                 this.liveEngine = null;

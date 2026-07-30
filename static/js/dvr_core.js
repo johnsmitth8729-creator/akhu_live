@@ -25,6 +25,40 @@ class DVREventBus {
     }
 }
 
+// --- 1.1 Unified Timezone Utility ---
+function formatUzbekistanTime(date, mode = 'time') {
+    const d = (date instanceof Date) ? date : new Date(date);
+    if (isNaN(d.getTime())) return '--:--:--';
+
+    if (mode === 'full' || mode === 'tooltip') {
+        const parts = new Intl.DateTimeFormat('en-GB', {
+            timeZone: 'Asia/Tashkent',
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit',
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit',
+            hour12: false
+        }).formatToParts(d);
+
+        const p = {};
+        parts.forEach(pt => { if (pt.type !== 'literal') p[pt.type] = pt.value; });
+        const dateStr = `${p.year}-${p.month}-${p.day} ${p.hour}:${p.minute}:${p.second}`;
+        return mode === 'tooltip' ? `${dateStr} (+05:00)` : dateStr;
+    }
+
+    return new Intl.DateTimeFormat('en-GB', {
+        timeZone: 'Asia/Tashkent',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: false
+    }).format(d);
+}
+
+window.formatUzbekistanTime = formatUzbekistanTime;
+
 // --- 2. Playback Clock ---
 class PlaybackClock {
     constructor() {
@@ -35,6 +69,9 @@ class PlaybackClock {
     }
     getTime() {
         return this.baseTimestampMs;
+    }
+    getFormattedTime(mode = 'full') {
+        return formatUzbekistanTime(this.baseTimestampMs, mode);
     }
 }
 
