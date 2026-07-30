@@ -860,21 +860,26 @@
                 }
             }
 
-            const recordingStartIso = selectedSegment.start;
-            const recordingStartMs = new Date(recordingStartIso).getTime();
-            const recordingDurationSec = selectedSegment.duration || 600;
-            const recordingEndMs = recordingStartMs + (recordingDurationSec * 1000);
-            const recordingEndIso = new Date(recordingEndMs).toISOString();
-            const localSeekOffset = Math.max(0, (targetTime - recordingStartMs) / 1000);
+            const segmentStartIso = selectedSegment.start;
+            const segmentDurationSec = selectedSegment.duration || 600;
+            const requestedOffsetSec = Math.abs(offsetSeconds);
 
-            // MANDATORY LOGGING
-            console.log(`[ReqID: ${requestId}] [DVREngine LOG] Recording Selected: ${selectedSegment.url || recordingStartIso}`);
-            console.log(`[ReqID: ${requestId}] [DVREngine LOG] Recording Start: ${recordingStartIso} (ms: ${recordingStartMs})`);
-            console.log(`[ReqID: ${requestId}] [DVREngine LOG] Recording End: ${recordingEndIso} (ms: ${recordingEndMs})`);
-            console.log(`[ReqID: ${requestId}] [DVREngine LOG] Local Seek Offset: ${localSeekOffset.toFixed(2)}s`);
+            // Compute local seek inside [0, segmentDurationSec]
+            let computedLocalSeek = segmentDurationSec - requestedOffsetSec;
+            if (computedLocalSeek < 0 || computedLocalSeek > segmentDurationSec) {
+                computedLocalSeek = Math.max(0, (targetTime - new Date(segmentStartIso).getTime()) / 1000);
+            }
+            computedLocalSeek = Math.min(Math.max(0, computedLocalSeek), segmentDurationSec);
 
-            // ONLY send recordingStartIso returned by /list to MediaMTX!
-            const mediaUrl = `/api/dvr/${this.streamId}/get/?start=${encodeURIComponent(recordingStartIso)}&duration=${Math.ceil(recordingDurationSec)}&format=fmp4`;
+            // MANDATORY INSTRUMENTATION LOGGING
+            console.log("segmentStart:", segmentStartIso);
+            console.log("segmentDuration:", segmentDurationSec);
+            console.log("requestedOffset:", requestedOffsetSec);
+            console.log("computedLocalSeek:", computedLocalSeek);
+            console.log("video.currentTime:", this.videoEl ? this.videoEl.currentTime : 0);
+
+            // ONLY send segmentStartIso returned by /list to MediaMTX!
+            const mediaUrl = `/api/dvr/${this.streamId}/get/?start=${encodeURIComponent(segmentStartIso)}&duration=${Math.ceil(segmentDurationSec)}&format=fmp4`;
             console.log(`[ReqID: ${requestId}] [DVREngine LOG] Final Playback URL sent to MediaMTX: ${mediaUrl}`);
 
             // Runtime MediaSource MIME Type Detection
@@ -920,6 +925,12 @@
                         let totalBytes = 0;
 
                         const appendChunk = async () => {
+                            // STOP IMMEDIATELY if video element has an error
+                            if (this.videoEl && this.videoEl.error) {
+                                console.error("[DVREngine LOG] video.error detected. Halting append loop.", this.videoEl.error);
+                                return;
+                            }
+
                             try {
                                 const { done, value } = await reader.read();
                                 if (done) {
@@ -933,39 +944,47 @@
                                 totalBytes += value.byteLength;
                                 console.log(`[DVREngine LOG] Read chunk: ${value.byteLength} bytes (Total: ${totalBytes} bytes)`);
 
-                                try {
-                                    if (this.sourceBuffer && !this.sourceBuffer.updating) {
+                                if (this.sourceBuffer && !this.sourceBuffer.updating) {
+                                    this.sourceBuffer.appendBuffer(value);
+                                } else if (this.sourceBuffer) {
+                                    await new Promise(r => this.sourceBuffer.addEventListener('updateend', r, { once: true }));
+                                    if (this.sourceBuffer && !this.videoEl.error) {
                                         this.sourceBuffer.appendBuffer(value);
-                                    } else if (this.sourceBuffer) {
-                                        await new Promise(r => this.sourceBuffer.addEventListener('updateend', r, { once: true }));
-                                        if (this.sourceBuffer) this.sourceBuffer.appendBuffer(value);
-                                    }
-                                } catch (appErr) {
-                                    console.error("[DVREngine LOG] appendBuffer() EXCEPTION:", appErr);
-                                    if (this.videoEl && this.videoEl.error) {
-                                        console.error(`[DVREngine LOG] video.error.code=${this.videoEl.error.code}, message=${this.videoEl.error.message}`);
                                     }
                                 }
 
-                                // Apply local seek offset if needed
-                                if (localSeekOffset > 0 && Math.abs(this.videoEl.currentTime - localSeekOffset) > 2) {
+                                // Check video.error after appendBuffer
+                                if (this.videoEl && this.videoEl.error) {
+                                    console.error(`[DVREngine LOG] video.error code=${this.videoEl.error.code} after appendBuffer. Halting MSE loop.`);
+                                    return;
+                                }
+
+                                // Apply computed local seek offset within [0, segmentDurationSec]
+                                if (computedLocalSeek > 0 && Math.abs(this.videoEl.currentTime - computedLocalSeek) > 1) {
                                     try {
-                                        console.log(`[DVREngine LOG] Performing local seek inside MSE buffer to ${localSeekOffset.toFixed(2)}s`);
-                                        this.videoEl.currentTime = localSeekOffset;
-                                    } catch(sErr) {}
+                                        console.log(`[DVREngine LOG] Performing local seek inside MSE buffer to ${computedLocalSeek.toFixed(2)}s (video.currentTime: ${this.videoEl.currentTime})`);
+                                        this.videoEl.currentTime = computedLocalSeek;
+                                    } catch(sErr) {
+                                        console.warn("[DVREngine LOG] Local seek warning:", sErr);
+                                    }
                                 }
 
-                                if (this.videoEl.paused) {
+                                if (this.videoEl.paused && !this.videoEl.error) {
                                     this.videoEl.play().catch(pErr => {
                                         console.warn("[DVREngine LOG] videoEl.play() warning:", pErr);
                                     });
                                 }
 
-                                appendChunk();
-                            } catch (e) {
-                                if (e.name !== 'AbortError') {
-                                    console.error("[DVREngine LOG] MSE append chunk loop error:", e);
+                                // Continue reading ONLY if video has no error
+                                if (!this.videoEl.error) {
+                                    appendChunk();
                                 }
+                            } catch (appErr) {
+                                console.error("[DVREngine LOG] appendBuffer() EXCEPTION. Stopping MSE loop immediately:", appErr);
+                                if (this.videoEl && this.videoEl.error) {
+                                    console.error(`[DVREngine LOG] video.error.code=${this.videoEl.error.code}, message=${this.videoEl.error.message}`);
+                                }
+                                // DO NOT continue reading or appending after error!
                             }
                         };
 
@@ -973,14 +992,14 @@
                     } catch (e) {
                         console.error("[DVREngine LOG] SourceBuffer creation or playback initialization FAILED:", e);
                         console.log("[DVREngine LOG] Fallback: setting video.src directly to mediaUrl.");
-                        this.setupDirectPlayback(mediaUrl, localSeekOffset);
+                        this.setupDirectPlayback(mediaUrl, computedLocalSeek);
                     }
                 });
 
                 this.videoEl.src = URL.createObjectURL(this.mediaSource);
             } else {
-                console.log("[DVREngine LOG] MediaSource not supported or no matching MIME candidate. Direct video.src fallback.");
-                this.setupDirectPlayback(mediaUrl, localSeekOffset);
+                console.warn("[DVREngine LOG] MediaSource not supported or no supported MIME type found. Fallback to direct video src.");
+                this.setupDirectPlayback(mediaUrl, computedLocalSeek);
             }
         }
 
