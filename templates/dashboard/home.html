@@ -206,8 +206,6 @@
                             <button class="dvr-quick-btn" onclick="shiftDVR(5)">-5 sec</button>
                             <button class="dvr-quick-btn" onclick="shiftDVR(20)">-20 sec</button>
                             <button class="dvr-quick-btn" onclick="shiftDVR(60)">-1 min</button>
-                            <button class="dvr-quick-btn" onclick="shiftDVR(180)">-3 min</button>
-                            <button class="dvr-quick-btn" onclick="shiftDVR(600)">-10 min</button>
                         </div>
                         
                         <!-- Go Live Action Button -->
@@ -642,10 +640,11 @@
 
     // Modal Live Engine Component
     class LiveEngine {
-        constructor(videoEl, whepUrl, hlsUrl) {
+        constructor(videoEl, whepUrl, hlsUrl, streamId) {
             this.videoEl = videoEl;
             this.whepUrl = whepUrl;
             this.hlsUrl = hlsUrl;
+            this.streamId = streamId;
             this.peerConnection = null;
             this.hlsPlayer = null;
             this.fallbackTriggered = false;
@@ -653,6 +652,14 @@
 
         async start() {
             this.stop();
+            const gridVideo = document.getElementById(`video-${this.streamId}`);
+            if (gridVideo && gridVideo.srcObject && gridVideo.srcObject.active) {
+                console.log(`[LiveEngine ${this.streamId}] Attaching active stream from grid card.`);
+                this.videoEl.srcObject = gridVideo.srcObject;
+                this.videoEl.play().catch(() => {});
+                return;
+            }
+
             try {
                 await this.connectWebRTC();
             } catch (err) {
@@ -945,7 +952,7 @@
             this.liveEngineContainer.classList.add('engine-active');
             this.dvrEngineContainer.classList.remove('engine-active');
 
-            this.liveEngine = new LiveEngine(this.liveVideo, whepUrl, hlsUrl);
+            this.liveEngine = new LiveEngine(this.liveVideo, whepUrl, hlsUrl, streamId);
             this.liveEngine.start();
 
             this.dvrEngine = new DVREngine(this.dvrVideo, streamId);
