@@ -779,7 +779,7 @@
         }
     }
 
-    // Modal DVR Engine Component (MediaSource fmp4 Streaming with Exhaustive Debug Logging)
+    // Modal DVR Engine Component (Segment-based Timestamp Matching & Local Seeking)
     class DVREngine {
         constructor(videoEl, streamId) {
             this.videoEl = videoEl;
@@ -787,6 +787,7 @@
             this.mediaSource = null;
             this.sourceBuffer = null;
             this.abortController = null;
+            this.loadedHandler = null;
             this.eventListeners = {};
             this.attachVideoLogging();
         }
@@ -811,54 +812,66 @@
             this.stop();
             const targetTime = Date.now() - (Math.abs(offsetSeconds) * 1000);
             const targetIso = new Date(targetTime).toISOString();
-            console.log(`[DVREngine LOG] Requested offset: -${offsetSeconds}s | Calculated Target Timestamp: ${targetIso} (ms: ${targetTime})`);
 
-            let selectedIso = null;
-            let listStatus = null;
-
+            let segments = [];
             try {
                 const listRes = await fetch(`/api/dvr/${this.streamId}/list/`);
-                listStatus = listRes.status;
                 console.log(`[DVREngine LOG] /api/dvr/${this.streamId}/list/ Response Status: ${listRes.status}`);
 
                 if (listRes.ok) {
-                    const segments = await listRes.json();
-                    console.log(`[DVREngine LOG] /list segments returned count: ${segments ? segments.length : 0}`, segments);
-
-                    if (Array.isArray(segments) && segments.length > 0) {
-                        let bestSegment = segments[0];
-                        let minDiff = Infinity;
-
-                        for (let i = 0; i < segments.length; i++) {
-                            const startTime = new Date(segments[i].start).getTime();
-                            const durationMs = (segments[i].duration || 60) * 1000;
-                            const endTime = startTime + durationMs;
-
-                            if (targetTime >= startTime && targetTime <= endTime) {
-                                bestSegment = segments[i];
-                                minDiff = 0;
-                                break;
-                            }
-                            
-                            const diff = Math.abs(startTime - targetTime);
-                            if (diff < minDiff) {
-                                minDiff = diff;
-                                bestSegment = segments[i];
-                            }
-                        }
-                        selectedIso = bestSegment.start;
-                    }
+                    segments = await listRes.json();
                 }
             } catch (err) {
                 console.warn("[DVREngine LOG] DVR list check error:", err);
             }
 
-            if (!selectedIso) {
-                selectedIso = targetIso;
+            if (!Array.isArray(segments) || segments.length === 0) {
+                console.warn(`[DVREngine LOG] No recorded segments returned by /list for stream ${this.streamId}.`);
+                alert("{% translate 'DVR recording is initializing. Please wait a few seconds and try again.' %}");
+                switchToLive();
+                return;
             }
 
-            const mediaUrl = `/api/dvr/${this.streamId}/get/?start=${encodeURIComponent(selectedIso)}&duration=600&format=fmp4`;
-            console.log(`[DVREngine LOG] Final Playback URL: ${mediaUrl} (Selected Segment Start: ${selectedIso})`);
+            // Find segment containing targetTime or closest segment
+            let selectedSegment = segments[0];
+            let minDiff = Infinity;
+
+            for (let i = 0; i < segments.length; i++) {
+                const segStartMs = new Date(segments[i].start).getTime();
+                const segDurationMs = (segments[i].duration || 60) * 1000;
+                const segEndMs = segStartMs + segDurationMs;
+
+                if (targetTime >= segStartMs && targetTime <= segEndMs) {
+                    selectedSegment = segments[i];
+                    minDiff = 0;
+                    break;
+                }
+
+                const diff = Math.abs(segStartMs - targetTime);
+                if (diff < minDiff) {
+                    minDiff = diff;
+                    selectedSegment = segments[i];
+                }
+            }
+
+            const recordingStartIso = selectedSegment.start;
+            const recordingStartMs = new Date(recordingStartIso).getTime();
+            const recordingDurationSec = selectedSegment.duration || 600;
+            const recordingEndMs = recordingStartMs + (recordingDurationSec * 1000);
+            const recordingEndIso = new Date(recordingEndMs).toISOString();
+            const localSeekOffset = Math.max(0, (targetTime - recordingStartMs) / 1000);
+
+            // MANDATORY LOGGING
+            console.log(`[DVREngine LOG] Requested Offset: -${offsetSeconds}s`);
+            console.log(`[DVREngine LOG] Requested Timestamp: ${targetIso} (ms: ${targetTime})`);
+            console.log(`[DVREngine LOG] Recording Selected: ${selectedSegment.url || recordingStartIso}`);
+            console.log(`[DVREngine LOG] Recording Start: ${recordingStartIso} (ms: ${recordingStartMs})`);
+            console.log(`[DVREngine LOG] Recording End: ${recordingEndIso} (ms: ${recordingEndMs})`);
+            console.log(`[DVREngine LOG] Local Seek Offset: ${localSeekOffset.toFixed(2)}s`);
+
+            // ONLY send recordingStartIso returned by /list to MediaMTX!
+            const mediaUrl = `/api/dvr/${this.streamId}/get/?start=${encodeURIComponent(recordingStartIso)}&duration=${Math.ceil(recordingDurationSec)}&format=fmp4`;
+            console.log(`[DVREngine LOG] Final Playback URL sent to MediaMTX: ${mediaUrl}`);
 
             // Runtime MediaSource MIME Type Detection
             const candidateMimes = [
@@ -882,7 +895,7 @@
             if (selectedMime) {
                 console.log(`[DVREngine LOG] Selected MIME Type: ${selectedMime}. Initializing MediaSource.`);
                 this.mediaSource = new MediaSource();
-                
+
                 this.mediaSource.addEventListener('sourceopen', async () => {
                     console.log(`[DVREngine LOG] MediaSource sourceopen event fired. readyState=${this.mediaSource.readyState}`);
                     try {
@@ -890,13 +903,13 @@
                         this.sourceBuffer = this.mediaSource.addSourceBuffer(selectedMime);
                         this.sourceBuffer.mode = 'segments';
                         console.log("[DVREngine LOG] SourceBuffer creation SUCCESS!");
-                        
+
                         this.abortController = new AbortController();
 
                         console.log(`[DVREngine LOG] Fetching fmp4 stream chunks from ${mediaUrl}...`);
                         const response = await fetch(mediaUrl, { signal: this.abortController.signal });
                         console.log(`[DVREngine LOG] Fetch /get HTTP Response Status: ${response.status}, Content-Type: ${response.headers.get('content-type')}`);
-                        
+
                         if (!response.ok) throw new Error(`HTTP ${response.status}`);
 
                         const reader = response.body.getReader();
@@ -930,6 +943,14 @@
                                     }
                                 }
 
+                                // Apply local seek offset if needed
+                                if (localSeekOffset > 0 && Math.abs(this.videoEl.currentTime - localSeekOffset) > 2) {
+                                    try {
+                                        console.log(`[DVREngine LOG] Performing local seek inside MSE buffer to ${localSeekOffset.toFixed(2)}s`);
+                                        this.videoEl.currentTime = localSeekOffset;
+                                    } catch(sErr) {}
+                                }
+
                                 if (this.videoEl.paused) {
                                     this.videoEl.play().catch(pErr => {
                                         console.warn("[DVREngine LOG] videoEl.play() warning:", pErr);
@@ -948,20 +969,41 @@
                     } catch (e) {
                         console.error("[DVREngine LOG] SourceBuffer creation or playback initialization FAILED:", e);
                         console.log("[DVREngine LOG] Fallback: setting video.src directly to mediaUrl.");
-                        this.videoEl.src = mediaUrl;
-                        this.videoEl.play().catch(() => {});
+                        this.setupDirectPlayback(mediaUrl, localSeekOffset);
                     }
                 });
 
                 this.videoEl.src = URL.createObjectURL(this.mediaSource);
             } else {
-                console.log("[DVREngine LOG] MediaSource not supported or no matching MIME candidate supported. Direct video.src fallback.");
-                this.videoEl.src = mediaUrl;
-                this.videoEl.play().catch(() => {});
+                console.log("[DVREngine LOG] MediaSource not supported or no matching MIME candidate. Direct video.src fallback.");
+                this.setupDirectPlayback(mediaUrl, localSeekOffset);
             }
         }
 
+        setupDirectPlayback(mediaUrl, localSeekOffset) {
+            this.loadedHandler = () => {
+                if (this.loadedHandler) {
+                    this.videoEl.removeEventListener('loadedmetadata', this.loadedHandler);
+                    this.loadedHandler = null;
+                }
+                if (localSeekOffset > 0 && this.videoEl.duration && localSeekOffset < this.videoEl.duration) {
+                    console.log(`[DVREngine LOG] Seeking direct video.src to localSeekOffset=${localSeekOffset.toFixed(2)}s`);
+                    this.videoEl.currentTime = localSeekOffset;
+                }
+                this.videoEl.play().catch(pErr => {
+                    console.warn("[DVREngine LOG] Direct video play error:", pErr);
+                });
+            };
+            this.videoEl.addEventListener('loadedmetadata', this.loadedHandler);
+            this.videoEl.src = mediaUrl;
+            this.videoEl.load();
+        }
+
         stop() {
+            if (this.loadedHandler) {
+                this.videoEl.removeEventListener('loadedmetadata', this.loadedHandler);
+                this.loadedHandler = null;
+            }
             if (this.abortController) {
                 try { this.abortController.abort(); } catch(e) {}
                 this.abortController = null;
