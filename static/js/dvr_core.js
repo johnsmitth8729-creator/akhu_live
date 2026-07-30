@@ -81,7 +81,8 @@ class PlaybackClock {
 
     async syncWithServer() {
         try {
-            const res = await fetch('/api/dvr/time/');
+            const timeUrl = (window.DVR_CONFIG && window.DVR_CONFIG.timeUrl) ? window.DVR_CONFIG.timeUrl : '/api/dvr/time/';
+            const res = await fetch(timeUrl);
             if (res.ok) {
                 const data = await res.json();
                 if (data.server_time_ms) {
@@ -151,14 +152,22 @@ class PlaybackProvider {
 
 class MediaMTXProvider extends PlaybackProvider {
     async list(streamId) {
-        const res = await fetch(`/api/dvr/${streamId}/list/`);
+        const listUrl = (window.DVR_CONFIG && window.DVR_CONFIG.listUrlTemplate)
+            ? window.DVR_CONFIG.listUrlTemplate.replace('STREAM_ID_PLACEHOLDER', encodeURIComponent(streamId))
+            : `/api/dvr/${encodeURIComponent(streamId)}/list/`;
+        const res = await fetch(listUrl);
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         return await res.json();
     }
     getStreamUrl(streamId, startIso, durationSec, format = 'fmp4') {
         const utcStartIso = new Date(startIso).toISOString();
         console.log(`[MediaMTXProvider] Generated UTC Start ISO: ${utcStartIso} (from raw: ${startIso})`);
-        return `/api/dvr/${encodeURIComponent(streamId)}/get/?start=${encodeURIComponent(utcStartIso)}&duration=${Math.ceil(durationSec)}&format=${format}`;
+        
+        let baseUrl = (window.DVR_CONFIG && window.DVR_CONFIG.getUrlTemplate)
+            ? window.DVR_CONFIG.getUrlTemplate.replace('STREAM_ID_PLACEHOLDER', encodeURIComponent(streamId))
+            : `/api/dvr/${encodeURIComponent(streamId)}/get/`;
+            
+        return `${baseUrl}?start=${encodeURIComponent(utcStartIso)}&duration=${Math.ceil(durationSec)}&format=${format}`;
     }
 }
 
