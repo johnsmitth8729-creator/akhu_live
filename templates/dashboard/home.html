@@ -292,10 +292,10 @@
 
             this.connectionTimeout = setTimeout(() => {
                 if (this.peerConnection && this.peerConnection.connectionState !== 'connected') {
-                    console.warn(`[WHEP ${this.cameraId}] WebRTC connection state did not reach connected in 5 seconds. Triggering fallback.`);
+                    console.warn(`[WHEP ${this.cameraId}] WebRTC connection state did not reach connected in 12 seconds. Triggering fallback.`);
                     this.triggerHlsFallback("ICE negotiation timeout");
                 }
-            }, 5000);
+            }, 12000);
 
             this.peerConnection.ontrack = (event) => {
                 this.videoEl.srcObject = event.streams[0];
@@ -329,8 +329,6 @@
 
             const offer = await this.peerConnection.createOffer();
             await this.peerConnection.setLocalDescription(offer);
-
-            await waitForIceGathering(this.peerConnection);
 
             const sdpOffer = this.peerConnection.localDescription.sdp;
 
@@ -691,7 +689,7 @@
                     console.warn("Live WebRTC negotiation timeout. Triggering fallback.");
                     this.triggerHlsFallback();
                 }
-            }, 5000);
+            }, 12000);
 
             this.peerConnection.ontrack = (event) => {
                 this.videoEl.srcObject = event.streams[0];
@@ -714,8 +712,6 @@
 
             const offer = await this.peerConnection.createOffer();
             await this.peerConnection.setLocalDescription(offer);
-
-            await waitForIceGathering(this.peerConnection);
 
             const sdpOffer = this.peerConnection.localDescription.sdp;
 
