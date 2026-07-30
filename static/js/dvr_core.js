@@ -379,9 +379,6 @@ class DVRMediaSource {
                 }
             } catch (e) {
                 console.error("[DVR-MSE-DEBUG ERROR] loadStream exception:", e);
-            }
-        });
-                console.error("[DVRMediaSource] Initialization error, falling back to direct video.src:", e);
                 this.setupDirectPlayback(mediaUrl, computedLocalSeek);
             }
         });
