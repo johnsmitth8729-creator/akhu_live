@@ -867,13 +867,13 @@
 
             const segmentStartIso = selectedSegment.start;
             const segmentDurationSec = selectedSegment.duration || 600;
-            const requestedOffsetSec = Math.abs(offsetSeconds);
+            const segStartMs = new Date(segmentStartIso).getTime();
 
-            let computedLocalSeek = segmentDurationSec - requestedOffsetSec;
+            let computedLocalSeek = (targetTime - segStartMs) / 1000;
             if (computedLocalSeek < 0 || computedLocalSeek > segmentDurationSec) {
-                computedLocalSeek = Math.max(0, (targetTime - new Date(segmentStartIso).getTime()) / 1000);
+                computedLocalSeek = Math.max(0, segmentDurationSec - Math.abs(offsetSeconds));
             }
-            computedLocalSeek = Math.min(Math.max(0, computedLocalSeek), segmentDurationSec);
+            computedLocalSeek = Math.min(Math.max(0, computedLocalSeek), Math.max(0, segmentDurationSec - 0.5));
 
             console.log("segmentStart:", segmentStartIso);
             console.log("segmentDuration:", segmentDurationSec);
