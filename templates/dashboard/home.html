@@ -779,7 +779,7 @@
         }
     }
 
-    // Modal DVR Engine Component (MediaSource fmp4 Streaming)
+    // Modal DVR Engine Component (MediaSource fmp4 Streaming with Exhaustive Debug Logging)
     class DVREngine {
         constructor(videoEl, streamId) {
             this.videoEl = videoEl;
@@ -787,17 +787,44 @@
             this.mediaSource = null;
             this.sourceBuffer = null;
             this.abortController = null;
+            this.eventListeners = {};
+            this.attachVideoLogging();
+        }
+
+        attachVideoLogging() {
+            const events = ['loadstart', 'loadedmetadata', 'loadeddata', 'canplay', 'playing', 'pause', 'waiting', 'stalled', 'error'];
+            events.forEach(evtName => {
+                const handler = (e) => {
+                    if (evtName === 'error') {
+                        const err = this.videoEl.error;
+                        console.error(`[DVREngine LOG] HTMLVideoElement ERROR event fired: Code=${err ? err.code : 'unknown'}, Message=${err ? err.message : 'none'}`);
+                    } else {
+                        console.log(`[DVREngine LOG] HTMLVideoElement event: ${evtName} (currentTime: ${this.videoEl.currentTime.toFixed(2)}, readyState: ${this.videoEl.readyState}, duration: ${this.videoEl.duration})`);
+                    }
+                };
+                this.eventListeners[evtName] = handler;
+                this.videoEl.addEventListener(evtName, handler);
+            });
         }
 
         async loadOffset(offsetSeconds) {
             this.stop();
             const targetTime = Date.now() - (Math.abs(offsetSeconds) * 1000);
+            const targetIso = new Date(targetTime).toISOString();
+            console.log(`[DVREngine LOG] Requested offset: -${offsetSeconds}s | Calculated Target Timestamp: ${targetIso} (ms: ${targetTime})`);
+
             let selectedIso = null;
+            let listStatus = null;
 
             try {
                 const listRes = await fetch(`/api/dvr/${this.streamId}/list/`);
+                listStatus = listRes.status;
+                console.log(`[DVREngine LOG] /api/dvr/${this.streamId}/list/ Response Status: ${listRes.status}`);
+
                 if (listRes.ok) {
                     const segments = await listRes.json();
+                    console.log(`[DVREngine LOG] /list segments returned count: ${segments ? segments.length : 0}`, segments);
+
                     if (Array.isArray(segments) && segments.length > 0) {
                         let bestSegment = segments[0];
                         let minDiff = Infinity;
@@ -823,41 +850,50 @@
                     }
                 }
             } catch (err) {
-                console.warn("DVR list check error:", err);
+                console.warn("[DVREngine LOG] DVR list check error:", err);
             }
 
             if (!selectedIso) {
-                selectedIso = new Date(targetTime).toISOString();
+                selectedIso = targetIso;
             }
 
             const mediaUrl = `/api/dvr/${this.streamId}/get/?start=${encodeURIComponent(selectedIso)}&duration=600&format=fmp4`;
-            console.log(`[DVREngine ${this.streamId}] Loading fmp4 stream for offset -${offsetSeconds}s: ${mediaUrl}`);
+            console.log(`[DVREngine LOG] Final Playback URL: ${mediaUrl} (Selected Segment Start: ${selectedIso})`);
 
             if ('MediaSource' in window && typeof MediaSource.isTypeSupported === 'function' && MediaSource.isTypeSupported('video/mp4; codecs="avc1.42E01E, mp4a.40.2"')) {
                 this.mediaSource = new MediaSource();
-                this.videoEl.src = URL.createObjectURL(this.mediaSource);
-
+                console.log("[DVREngine LOG] MediaSource created. Attaching objectURL to video.src.");
+                
                 this.mediaSource.addEventListener('sourceopen', async () => {
+                    console.log(`[DVREngine LOG] MediaSource sourceopen event fired. readyState=${this.mediaSource.readyState}`);
                     try {
                         const mime = 'video/mp4; codecs="avc1.42E01E, mp4a.40.2"';
                         this.sourceBuffer = this.mediaSource.addSourceBuffer(mime);
                         this.sourceBuffer.mode = 'segments';
                         this.abortController = new AbortController();
 
+                        console.log(`[DVREngine LOG] Fetching fmp4 stream chunks from ${mediaUrl}...`);
                         const response = await fetch(mediaUrl, { signal: this.abortController.signal });
+                        console.log(`[DVREngine LOG] Fetch /get HTTP Response Status: ${response.status}, Content-Type: ${response.headers.get('content-type')}`);
+                        
                         if (!response.ok) throw new Error(`HTTP ${response.status}`);
 
                         const reader = response.body.getReader();
+                        let totalBytes = 0;
 
                         const appendChunk = async () => {
                             try {
                                 const { done, value } = await reader.read();
                                 if (done) {
+                                    console.log(`[DVREngine LOG] Chunk stream read completed. Total bytes read: ${totalBytes}`);
                                     if (this.mediaSource && this.mediaSource.readyState === 'open') {
                                         this.mediaSource.endOfStream();
                                     }
                                     return;
                                 }
+
+                                totalBytes += value.byteLength;
+                                console.log(`[DVREngine LOG] Read chunk: ${value.byteLength} bytes (Total: ${totalBytes} bytes)`);
 
                                 if (this.sourceBuffer && !this.sourceBuffer.updating) {
                                     this.sourceBuffer.appendBuffer(value);
@@ -867,25 +903,31 @@
                                 }
 
                                 if (this.videoEl.paused) {
-                                    this.videoEl.play().catch(() => {});
+                                    this.videoEl.play().catch(pErr => {
+                                        console.warn("[DVREngine LOG] videoEl.play() warning:", pErr);
+                                    });
                                 }
 
                                 appendChunk();
                             } catch (e) {
                                 if (e.name !== 'AbortError') {
-                                    console.warn("MSE append chunk error:", e);
+                                    console.error("[DVREngine LOG] MSE append chunk error:", e);
                                 }
                             }
                         };
 
                         appendChunk();
                     } catch (e) {
-                        console.warn("MSE playback initialization failed, fallback to direct src:", e);
+                        console.error("[DVREngine LOG] MSE playback initialization failed:", e);
+                        console.log("[DVREngine LOG] Fallback: setting video.src directly to mediaUrl.");
                         this.videoEl.src = mediaUrl;
                         this.videoEl.play().catch(() => {});
                     }
                 });
+
+                this.videoEl.src = URL.createObjectURL(this.mediaSource);
             } else {
+                console.log("[DVREngine LOG] MediaSource not supported or codec unsupported. Direct video.src fallback.");
                 this.videoEl.src = mediaUrl;
                 this.videoEl.play().catch(() => {});
             }
