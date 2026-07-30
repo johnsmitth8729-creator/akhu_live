@@ -810,23 +810,29 @@
 
         async loadOffset(offsetSeconds) {
             this.stop();
+            const requestId = (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') ? crypto.randomUUID() : Math.random().toString(36).substring(2, 10);
             const targetTime = Date.now() - (Math.abs(offsetSeconds) * 1000);
             const targetIso = new Date(targetTime).toISOString();
 
+            console.log(`[ReqID: ${requestId}] [DVREngine LOG] Requested Offset: -${offsetSeconds}s`);
+            console.log(`[ReqID: ${requestId}] [DVREngine LOG] Requested Timestamp: ${targetIso} (ms: ${targetTime})`);
+
             let segments = [];
             try {
-                const listRes = await fetch(`/api/dvr/${this.streamId}/list/`);
-                console.log(`[DVREngine LOG] /api/dvr/${this.streamId}/list/ Response Status: ${listRes.status}`);
+                const listUrl = `/api/dvr/${this.streamId}/list/`;
+                console.log(`[ReqID: ${requestId}] [DVREngine LOG] Fetching GET ${listUrl}...`);
+                const listRes = await fetch(listUrl);
+                console.log(`[ReqID: ${requestId}] [DVREngine LOG] ${listUrl} Response Status: ${listRes.status}`);
 
                 if (listRes.ok) {
                     segments = await listRes.json();
                 }
             } catch (err) {
-                console.warn("[DVREngine LOG] DVR list check error:", err);
+                console.warn(`[ReqID: ${requestId}] [DVREngine LOG] DVR list check error:`, err);
             }
 
             if (!Array.isArray(segments) || segments.length === 0) {
-                console.warn(`[DVREngine LOG] No recorded segments returned by /list for stream ${this.streamId}.`);
+                console.warn(`[ReqID: ${requestId}] [DVREngine LOG] No recorded segments returned by /list for stream ${this.streamId}.`);
                 alert("{% translate 'DVR recording is initializing. Please wait a few seconds and try again.' %}");
                 switchToLive();
                 return;
@@ -862,16 +868,14 @@
             const localSeekOffset = Math.max(0, (targetTime - recordingStartMs) / 1000);
 
             // MANDATORY LOGGING
-            console.log(`[DVREngine LOG] Requested Offset: -${offsetSeconds}s`);
-            console.log(`[DVREngine LOG] Requested Timestamp: ${targetIso} (ms: ${targetTime})`);
-            console.log(`[DVREngine LOG] Recording Selected: ${selectedSegment.url || recordingStartIso}`);
-            console.log(`[DVREngine LOG] Recording Start: ${recordingStartIso} (ms: ${recordingStartMs})`);
-            console.log(`[DVREngine LOG] Recording End: ${recordingEndIso} (ms: ${recordingEndMs})`);
-            console.log(`[DVREngine LOG] Local Seek Offset: ${localSeekOffset.toFixed(2)}s`);
+            console.log(`[ReqID: ${requestId}] [DVREngine LOG] Recording Selected: ${selectedSegment.url || recordingStartIso}`);
+            console.log(`[ReqID: ${requestId}] [DVREngine LOG] Recording Start: ${recordingStartIso} (ms: ${recordingStartMs})`);
+            console.log(`[ReqID: ${requestId}] [DVREngine LOG] Recording End: ${recordingEndIso} (ms: ${recordingEndMs})`);
+            console.log(`[ReqID: ${requestId}] [DVREngine LOG] Local Seek Offset: ${localSeekOffset.toFixed(2)}s`);
 
             // ONLY send recordingStartIso returned by /list to MediaMTX!
             const mediaUrl = `/api/dvr/${this.streamId}/get/?start=${encodeURIComponent(recordingStartIso)}&duration=${Math.ceil(recordingDurationSec)}&format=fmp4`;
-            console.log(`[DVREngine LOG] Final Playback URL sent to MediaMTX: ${mediaUrl}`);
+            console.log(`[ReqID: ${requestId}] [DVREngine LOG] Final Playback URL sent to MediaMTX: ${mediaUrl}`);
 
             // Runtime MediaSource MIME Type Detection
             const candidateMimes = [
@@ -885,7 +889,7 @@
             if ('MediaSource' in window && typeof MediaSource.isTypeSupported === 'function') {
                 for (const mimeCandidate of candidateMimes) {
                     const isSupp = MediaSource.isTypeSupported(mimeCandidate);
-                    console.log(`[DVREngine LOG] MediaSource.isTypeSupported('${mimeCandidate}'): ${isSupp}`);
+                    console.log(`[ReqID: ${requestId}] [DVREngine LOG] MediaSource.isTypeSupported('${mimeCandidate}'): ${isSupp}`);
                     if (isSupp && !selectedMime) {
                         selectedMime = mimeCandidate;
                     }
@@ -893,22 +897,22 @@
             }
 
             if (selectedMime) {
-                console.log(`[DVREngine LOG] Selected MIME Type: ${selectedMime}. Initializing MediaSource.`);
+                console.log(`[ReqID: ${requestId}] [DVREngine LOG] Selected MIME Type: ${selectedMime}. Initializing MediaSource.`);
                 this.mediaSource = new MediaSource();
 
                 this.mediaSource.addEventListener('sourceopen', async () => {
-                    console.log(`[DVREngine LOG] MediaSource sourceopen event fired. readyState=${this.mediaSource.readyState}`);
+                    console.log(`[ReqID: ${requestId}] [DVREngine LOG] MediaSource sourceopen event fired. readyState=${this.mediaSource.readyState}`);
                     try {
-                        console.log(`[DVREngine LOG] Creating SourceBuffer with MIME: ${selectedMime}`);
+                        console.log(`[ReqID: ${requestId}] [DVREngine LOG] Creating SourceBuffer with MIME: ${selectedMime}`);
                         this.sourceBuffer = this.mediaSource.addSourceBuffer(selectedMime);
                         this.sourceBuffer.mode = 'segments';
-                        console.log("[DVREngine LOG] SourceBuffer creation SUCCESS!");
+                        console.log(`[ReqID: ${requestId}] [DVREngine LOG] SourceBuffer creation SUCCESS!`);
 
                         this.abortController = new AbortController();
 
-                        console.log(`[DVREngine LOG] Fetching fmp4 stream chunks from ${mediaUrl}...`);
+                        console.log(`[ReqID: ${requestId}] [DVREngine LOG] Fetching fmp4 stream chunks from ${mediaUrl}...`);
                         const response = await fetch(mediaUrl, { signal: this.abortController.signal });
-                        console.log(`[DVREngine LOG] Fetch /get HTTP Response Status: ${response.status}, Content-Type: ${response.headers.get('content-type')}`);
+                        console.log(`[ReqID: ${requestId}] [DVREngine LOG] Fetch /get Response Status: ${response.status}, Content-Type: ${response.headers.get('content-type')}`);
 
                         if (!response.ok) throw new Error(`HTTP ${response.status}`);
 
