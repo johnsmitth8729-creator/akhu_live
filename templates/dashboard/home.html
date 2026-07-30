@@ -893,44 +893,6 @@
         }
     }
 
-        setupDirectPlayback(mediaUrl, localSeekOffset) {
-            this.loadedHandler = () => {
-                if (this.loadedHandler) {
-                    this.videoEl.removeEventListener('loadedmetadata', this.loadedHandler);
-                    this.loadedHandler = null;
-                }
-                if (localSeekOffset > 0 && this.videoEl.duration && localSeekOffset < this.videoEl.duration) {
-                    console.log(`[DVREngine LOG] Seeking direct video.src to localSeekOffset=${localSeekOffset.toFixed(2)}s`);
-                    this.videoEl.currentTime = localSeekOffset;
-                }
-                this.videoEl.play().catch(pErr => {
-                    console.warn("[DVREngine LOG] Direct video play error:", pErr);
-                });
-            };
-            this.videoEl.addEventListener('loadedmetadata', this.loadedHandler);
-            this.videoEl.src = mediaUrl;
-            this.videoEl.load();
-        }
-
-        stop() {
-            if (this.loadedHandler) {
-                this.videoEl.removeEventListener('loadedmetadata', this.loadedHandler);
-                this.loadedHandler = null;
-            }
-            if (this.abortController) {
-                try { this.abortController.abort(); } catch(e) {}
-                this.abortController = null;
-            }
-            if (this.mediaSource && this.mediaSource.readyState === 'open') {
-                try { this.mediaSource.endOfStream(); } catch(e) {}
-            }
-            this.mediaSource = null;
-            this.sourceBuffer = null;
-            this.videoEl.pause();
-            this.videoEl.removeAttribute('src');
-            this.videoEl.load();
-        }
-    }
 
     // Fullscreen and Orientation Manager
     class FullscreenManager {
