@@ -320,6 +320,8 @@ class DVRServerTimeView(View):
         })
 
 
+from urllib.parse import quote
+
 class DVRGetView(View):
     """
     Django Streaming Proxy to MediaMTX Playback Get API.
@@ -330,7 +332,9 @@ class DVRGetView(View):
         duration = request.GET.get('duration', '600')
         fmt = request.GET.get('format', 'fmp4')
 
-        playback_url = f"http://127.0.0.1:9996/get?path={stream_id}&start={start}&duration={duration}&format={fmt}"
+        # Quote start parameter so +05:00 timezone offset becomes %2B05%3A00
+        quoted_start = quote(start, safe='')
+        playback_url = f"http://127.0.0.1:9996/get?path={stream_id}&start={quoted_start}&duration={duration}&format={fmt}"
         
         logger.info(f"[DVR Proxy] Incoming request for stream {stream_id} (start: {start}, duration: {duration})")
         logger.info(f"[DVR Proxy] Upstream URL: {playback_url}")
@@ -344,10 +348,13 @@ class DVRGetView(View):
             print(f"[DVR Proxy] Upstream status: {upstream.status_code}, Content-Type: {upstream.headers.get('Content-Type')}")
 
             if upstream.status_code != 200:
+                first_500 = upstream.content[:500]
+                logger.error(f"[DVR Proxy] Upstream non-200 response: {first_500}")
+                print(f"[DVR Proxy] Upstream non-200 response (first 500 bytes): {first_500}")
                 return HttpResponse(
                     upstream.content,
                     status=upstream.status_code,
-                    content_type=upstream.headers.get('Content-Type', 'text/plain')
+                    content_type=upstream.headers.get('Content-Type', 'application/json')
                 )
 
             logger.info("[DVR Proxy] Streaming started")

@@ -160,14 +160,11 @@ class MediaMTXProvider extends PlaybackProvider {
         return await res.json();
     }
     getStreamUrl(streamId, startIso, durationSec, format = 'fmp4') {
-        const utcStartIso = new Date(startIso).toISOString();
-        console.log(`[MediaMTXProvider] Generated UTC Start ISO: ${utcStartIso} (from raw: ${startIso})`);
-        
         let baseUrl = (window.DVR_CONFIG && window.DVR_CONFIG.getUrlTemplate)
             ? window.DVR_CONFIG.getUrlTemplate.replace('STREAM_ID_PLACEHOLDER', encodeURIComponent(streamId))
             : `/api/dvr/${encodeURIComponent(streamId)}/get/`;
             
-        return `${baseUrl}?start=${encodeURIComponent(utcStartIso)}&duration=${Math.ceil(durationSec)}&format=${format}`;
+        return `${baseUrl}?start=${encodeURIComponent(startIso)}&duration=${Math.ceil(durationSec)}&format=${format}`;
     }
 }
 
