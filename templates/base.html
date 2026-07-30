@@ -251,21 +251,39 @@
     
     <!-- Clock & Theme Toggle Scripts -->
     <script>
-        // Live system clock running in topbar (Asia/Tashkent Timezone)
+        // Live system clock running in topbar (Asia/Tashkent Timezone + Server Sync)
+        let serverClockOffsetMs = 0;
+        
+        async function syncHeaderClockWithServer() {
+            try {
+                const res = await fetch('/api/dvr/time/');
+                if (res.ok) {
+                    const data = await res.json();
+                    if (data.server_time_ms) {
+                        serverClockOffsetMs = data.server_time_ms - Date.now();
+                    }
+                }
+            } catch (e) {
+                console.warn("[HeaderClock] Server sync failed:", e);
+            }
+        }
+
         function updateClock() {
             const clockEl = document.getElementById('live-clock');
             if (clockEl) {
-                const now = new Date();
-                const timeFormatter = new Intl.DateTimeFormat('en-GB', {
+                const currentMs = Date.now() + serverClockOffsetMs;
+                const now = new Date(currentMs);
+                const timeFormatter = new Intl.DateTimeFormat('en-US', {
                     timeZone: 'Asia/Tashkent',
                     hour: '2-digit',
                     minute: '2-digit',
                     second: '2-digit',
-                    hour12: false
+                    hour12: true
                 });
                 clockEl.innerText = timeFormatter.format(now);
             }
         }
+        syncHeaderClockWithServer();
         setInterval(updateClock, 1000);
         updateClock();
 
