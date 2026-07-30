@@ -794,13 +794,40 @@
             this.streamId = streamId;
         }
 
-        loadOffset(offsetSeconds) {
+        async loadOffset(offsetSeconds) {
             this.stop();
-            const nowMs = Date.now();
-            const targetMs = nowMs - (Math.abs(offsetSeconds) * 1000);
-            const targetIso = new Date(targetMs).toISOString();
+            const targetTime = Date.now() - (Math.abs(offsetSeconds) * 1000);
+            let selectedIso = null;
 
-            this.videoEl.src = `/api/dvr/${this.streamId}/get/?start=${encodeURIComponent(targetIso)}&duration=600&format=fmp4`;
+            try {
+                const listRes = await fetch(`/api/dvr/${this.streamId}/list/`);
+                if (listRes.ok) {
+                    const segments = await listRes.json();
+                    if (Array.isArray(segments) && segments.length > 0) {
+                        let bestSegment = segments[0];
+                        let minDiff = Math.abs(new Date(segments[0].start).getTime() - targetTime);
+
+                        for (let i = 1; i < segments.length; i++) {
+                            const segTime = new Date(segments[i].start).getTime();
+                            const diff = Math.abs(segTime - targetTime);
+                            if (diff < minDiff) {
+                                minDiff = diff;
+                                bestSegment = segments[i];
+                            }
+                        }
+                        selectedIso = bestSegment.start;
+                    }
+                }
+            } catch (err) {
+                console.warn("Error fetching DVR segment list:", err);
+            }
+
+            if (!selectedIso) {
+                selectedIso = new Date(targetTime).toISOString();
+            }
+
+            console.log(`[DVREngine ${this.streamId}] Loading offset -${offsetSeconds}s with start timestamp: ${selectedIso}`);
+            this.videoEl.src = `/api/dvr/${this.streamId}/get/?start=${encodeURIComponent(selectedIso)}&duration=60&format=fmp4`;
             this.videoEl.load();
             this.videoEl.play().catch(e => {
                 console.warn("DVR Playback failed or was paused by user:", e);
