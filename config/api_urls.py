@@ -31,6 +31,7 @@ urlpatterns = [
     path('stop-stream/', sources_api.StopStreamAPIView.as_view(), name='stop_stream'),
     path('start-record/', sources_api.StartRecordAPIView.as_view(), name='start_record'),
     path('stop-record/', sources_api.StopRecordAPIView.as_view(), name='stop_record'),
+    path('dvr/time/', dashboard_views.DVRServerTimeView.as_view(), name='dvr_time'),
     path('dvr/<str:stream_id>/list/', dashboard_views.DVRListView.as_view(), name='dvr_list'),
     path('dvr/<str:stream_id>/get/', dashboard_views.DVRGetView.as_view(), name='dvr_get'),
     path('', include(router.urls)),
