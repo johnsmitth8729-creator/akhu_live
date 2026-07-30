@@ -784,85 +784,43 @@
         constructor(videoEl, streamId) {
             this.videoEl = videoEl;
             this.streamId = streamId;
-            this.loadedHandler = null;
         }
 
         async loadOffset(offsetSeconds) {
             this.stop();
             const targetTime = Date.now() - (Math.abs(offsetSeconds) * 1000);
-            let selectedIso = null;
-            let segStartMs = targetTime;
-            let hasRecordedSegments = false;
-
+            
             try {
                 const listRes = await fetch(`/api/dvr/${this.streamId}/list/`);
                 if (listRes.ok) {
                     const segments = await listRes.json();
                     if (Array.isArray(segments) && segments.length > 0) {
-                        hasRecordedSegments = true;
-                        let bestSegment = segments[0];
-                        let minDiff = Infinity;
-
-                        for (let i = 0; i < segments.length; i++) {
-                            const startTime = new Date(segments[i].start).getTime();
-                            const durationMs = (segments[i].duration || 60) * 1000;
-                            const endTime = startTime + durationMs;
-
-                            if (targetTime >= startTime && targetTime <= endTime) {
-                                bestSegment = segments[i];
-                                minDiff = 0;
-                                break;
-                            }
-                            
-                            const diff = Math.abs(startTime - targetTime);
-                            if (diff < minDiff) {
-                                minDiff = diff;
-                                bestSegment = segments[i];
-                            }
+                        const recStart = new Date(segments[0].start).getTime();
+                        if (targetTime < recStart - 5000) {
+                            console.warn(`[DVREngine ${this.streamId}] Requested offset -${offsetSeconds}s is before stream recording start.`);
+                            alert("{% translate 'DVR recording for this time is not available yet.' %}");
+                            switchToLive();
+                            return;
                         }
-                        selectedIso = bestSegment.start;
-                        segStartMs = new Date(bestSegment.start).getTime();
                     }
                 }
             } catch (err) {
-                console.warn("Error fetching DVR segment list:", err);
+                console.warn("DVR list check error:", err);
             }
 
-            if (!hasRecordedSegments) {
-                console.warn(`[DVREngine ${this.streamId}] No recorded DVR segments available yet for offset -${offsetSeconds}s.`);
-                alert("{% translate 'DVR recording is initializing. Please wait a few seconds and try again.' %}");
-                switchToLive();
-                return;
-            }
-
-            const seekSeconds = Math.max(0, (targetTime - segStartMs) / 1000);
-            console.log(`[DVREngine ${this.streamId}] Loading offset -${offsetSeconds}s (Start: ${selectedIso}, Seek: ${seekSeconds.toFixed(1)}s)`);
+            const targetIso = new Date(targetTime).toISOString();
+            console.log(`[DVREngine ${this.streamId}] Requesting exact target timestamp -${offsetSeconds}s: ${targetIso}`);
             
-            const mediaUrl = `/api/dvr/${this.streamId}/get/?start=${encodeURIComponent(selectedIso)}&duration=60&format=fmp4`;
+            const mediaUrl = `/api/dvr/${this.streamId}/get/?start=${encodeURIComponent(targetIso)}&duration=600&format=fmp4`;
             
-            this.loadedHandler = () => {
-                if (this.loadedHandler) {
-                    this.videoEl.removeEventListener('loadedmetadata', this.loadedHandler);
-                    this.loadedHandler = null;
-                }
-                if (seekSeconds > 0 && this.videoEl.duration && seekSeconds < this.videoEl.duration) {
-                    this.videoEl.currentTime = seekSeconds;
-                }
-                this.videoEl.play().catch(e => {
-                    console.warn("DVR Playback failed:", e);
-                });
-            };
-
-            this.videoEl.addEventListener('loadedmetadata', this.loadedHandler);
             this.videoEl.src = mediaUrl;
             this.videoEl.load();
+            this.videoEl.play().catch(e => {
+                console.warn("DVR Playback play error:", e);
+            });
         }
 
         stop() {
-            if (this.loadedHandler) {
-                this.videoEl.removeEventListener('loadedmetadata', this.loadedHandler);
-                this.loadedHandler = null;
-            }
             this.videoEl.pause();
             this.videoEl.removeAttribute('src');
             this.videoEl.load();
