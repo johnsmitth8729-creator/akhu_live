@@ -9,6 +9,8 @@
 {% block extra_head %}
 <!-- Include HLS.js for fallback HLS streaming -->
 <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+<!-- Include Phase 1 Core Modular DVR Architecture Script -->
+<script src="{% static 'js/dvr_core.js' %}?v=2.0.0"></script>
 <link rel="stylesheet" href="{% static 'css/player.css' %}">
 <style>
     .filter-card {
@@ -779,15 +781,17 @@
         }
     }
 
-    // Modal DVR Engine Component (Segment-based Timestamp Matching & Local Seeking)
+    // Modal DVR Engine Component (Phase 1 Modular Architecture Integration)
     class DVREngine {
         constructor(videoEl, streamId) {
             this.videoEl = videoEl;
             this.streamId = streamId;
-            this.mediaSource = null;
-            this.sourceBuffer = null;
-            this.abortController = null;
-            this.loadedHandler = null;
+            this.eventBus = new DVREventBus();
+            this.clock = new PlaybackClock();
+            this.stateMachine = new DVRStateMachine(this.eventBus);
+            this.provider = new MediaMTXProvider();
+            this.cache = new DVRCache(256, 20);
+            this.dvrMediaSource = new DVRMediaSource(this.videoEl, this.eventBus);
             this.eventListeners = {};
             this.attachVideoLogging();
         }
@@ -810,6 +814,8 @@
 
         async loadOffset(offsetSeconds) {
             this.stop();
+            this.stateMachine.setState(DVRState.SEEKING, { offsetSeconds });
+
             const requestId = (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') ? crypto.randomUUID() : Math.random().toString(36).substring(2, 10);
             const targetTime = Date.now() - (Math.abs(offsetSeconds) * 1000);
             const targetIso = new Date(targetTime).toISOString();
@@ -819,26 +825,19 @@
 
             let segments = [];
             try {
-                const listUrl = `/api/dvr/${this.streamId}/list/`;
-                console.log(`[ReqID: ${requestId}] [DVREngine LOG] Fetching GET ${listUrl}...`);
-                const listRes = await fetch(listUrl);
-                console.log(`[ReqID: ${requestId}] [DVREngine LOG] ${listUrl} Response Status: ${listRes.status}`);
-
-                if (listRes.ok) {
-                    segments = await listRes.json();
-                }
+                segments = await this.provider.list(this.streamId);
             } catch (err) {
                 console.warn(`[ReqID: ${requestId}] [DVREngine LOG] DVR list check error:`, err);
             }
 
             if (!Array.isArray(segments) || segments.length === 0) {
                 console.warn(`[ReqID: ${requestId}] [DVREngine LOG] No recorded segments returned by /list for stream ${this.streamId}.`);
+                this.stateMachine.setState(DVRState.ERROR, { error: 'No recording segments' });
                 alert("{% translate 'DVR recording is initializing. Please wait a few seconds and try again.' %}");
                 switchToLive();
                 return;
             }
 
-            // Find segment containing targetTime or closest segment
             let selectedSegment = segments[0];
             let minDiff = Infinity;
 
@@ -864,158 +863,35 @@
             const segmentDurationSec = selectedSegment.duration || 600;
             const requestedOffsetSec = Math.abs(offsetSeconds);
 
-            // Compute local seek inside [0, segmentDurationSec]
             let computedLocalSeek = segmentDurationSec - requestedOffsetSec;
             if (computedLocalSeek < 0 || computedLocalSeek > segmentDurationSec) {
                 computedLocalSeek = Math.max(0, (targetTime - new Date(segmentStartIso).getTime()) / 1000);
             }
             computedLocalSeek = Math.min(Math.max(0, computedLocalSeek), segmentDurationSec);
 
-            // MANDATORY INSTRUMENTATION LOGGING
             console.log("segmentStart:", segmentStartIso);
             console.log("segmentDuration:", segmentDurationSec);
             console.log("requestedOffset:", requestedOffsetSec);
             console.log("computedLocalSeek:", computedLocalSeek);
             console.log("video.currentTime:", this.videoEl ? this.videoEl.currentTime : 0);
 
-            // ONLY send segmentStartIso returned by /list to MediaMTX!
-            const mediaUrl = `/api/dvr/${this.streamId}/get/?start=${encodeURIComponent(segmentStartIso)}&duration=${Math.ceil(segmentDurationSec)}&format=fmp4`;
+            const mediaUrl = this.provider.getStreamUrl(this.streamId, segmentStartIso, segmentDurationSec);
             console.log(`[ReqID: ${requestId}] [DVREngine LOG] Final Playback URL sent to MediaMTX: ${mediaUrl}`);
 
-            // Runtime MediaSource MIME Type Detection
-            const candidateMimes = [
-                'video/mp4; codecs="avc1.42E01E,opus"',
-                'video/mp4; codecs="avc1.42E01E, opus"',
-                'video/mp4; codecs="avc1.42E01E"',
-                'video/mp4'
-            ];
+            this.stateMachine.setState(DVRState.BUFFERING, { mediaUrl, computedLocalSeek });
+            await this.dvrMediaSource.loadStream(mediaUrl, computedLocalSeek);
+            this.stateMachine.setState(DVRState.PLAYBACK);
+        }
 
-            let selectedMime = null;
-            if ('MediaSource' in window && typeof MediaSource.isTypeSupported === 'function') {
-                for (const mimeCandidate of candidateMimes) {
-                    const isSupp = MediaSource.isTypeSupported(mimeCandidate);
-                    console.log(`[ReqID: ${requestId}] [DVREngine LOG] MediaSource.isTypeSupported('${mimeCandidate}'): ${isSupp}`);
-                    if (isSupp && !selectedMime) {
-                        selectedMime = mimeCandidate;
-                    }
-                }
+        stop() {
+            if (this.dvrMediaSource) {
+                this.dvrMediaSource.stop();
             }
-
-            if (selectedMime) {
-                console.log(`[ReqID: ${requestId}] [DVREngine LOG] Selected MIME Type: ${selectedMime}. Initializing MediaSource.`);
-                this.mediaSource = new MediaSource();
-
-                this.mediaSource.addEventListener('sourceopen', async () => {
-                    console.log(`[ReqID: ${requestId}] [DVREngine LOG] MediaSource sourceopen event fired. readyState=${this.mediaSource.readyState}`);
-                    try {
-                        console.log(`[ReqID: ${requestId}] [DVREngine LOG] Creating SourceBuffer with MIME: ${selectedMime}`);
-                        this.sourceBuffer = this.mediaSource.addSourceBuffer(selectedMime);
-                        this.sourceBuffer.mode = 'segments';
-                        console.log(`[ReqID: ${requestId}] [DVREngine LOG] SourceBuffer creation SUCCESS!`);
-
-                        this.abortController = new AbortController();
-
-                        console.log(`[ReqID: ${requestId}] [DVREngine LOG] Fetching fmp4 stream chunks from ${mediaUrl}...`);
-                        const response = await fetch(mediaUrl, { signal: this.abortController.signal });
-                        console.log(`[ReqID: ${requestId}] [DVREngine LOG] Fetch /get Response Status: ${response.status}, Content-Type: ${response.headers.get('content-type')}`);
-
-                        if (!response.ok) throw new Error(`HTTP ${response.status}`);
-
-                        const reader = response.body.getReader();
-                        let totalBytes = 0;
-                        const queue = [];
-                        let streamFinished = false;
-                        let initialSeekDone = false;
-
-                        const pump = () => {
-                            if (!this.sourceBuffer) return;
-                            if (this.videoEl && this.videoEl.error) {
-                                console.error("[DVREngine LOG] video.error detected during pump. Stopping pump.", this.videoEl.error);
-                                return;
-                            }
-                            if (this.sourceBuffer.updating) return;
-
-                            if (queue.length > 0) {
-                                const chunk = queue.shift();
-                                try {
-                                    this.sourceBuffer.appendBuffer(chunk);
-                                } catch (appErr) {
-                                    console.error("[DVREngine LOG] appendBuffer EXCEPTION in pump:", appErr);
-                                }
-                            } else if (streamFinished) {
-                                if (this.mediaSource && this.mediaSource.readyState === 'open' && !this.sourceBuffer.updating) {
-                                    try {
-                                        console.log("[DVREngine LOG] Queue empty & stream finished. Calling mediaSource.endOfStream().");
-                                        this.mediaSource.endOfStream();
-                                    } catch (eosErr) {
-                                        console.warn("[DVREngine LOG] endOfStream warning:", eosErr);
-                                    }
-                                }
-                            }
-
-                            // Perform local seek once buffer contains data
-                            if (!initialSeekDone && computedLocalSeek > 0 && this.sourceBuffer && !this.sourceBuffer.updating) {
-                                if (this.videoEl && this.videoEl.seekable && this.videoEl.seekable.length > 0) {
-                                    const seekTarget = Math.min(computedLocalSeek, this.videoEl.seekable.end(0));
-                                    console.log(`[DVREngine LOG] Performing local seek to ${seekTarget.toFixed(2)}s (video.currentTime: ${this.videoEl.currentTime})`);
-                                    try {
-                                        this.videoEl.currentTime = seekTarget;
-                                        initialSeekDone = true;
-                                    } catch (sErr) {
-                                        console.warn("[DVREngine LOG] Local seek error:", sErr);
-                                    }
-                                }
-                            }
-
-                            if (this.videoEl && this.videoEl.paused && !this.videoEl.error && (this.sourceBuffer && this.sourceBuffer.buffered && this.sourceBuffer.buffered.length > 0)) {
-                                this.videoEl.play().catch(pErr => {
-                                    if (pErr.name !== 'AbortError') {
-                                        console.warn("[DVREngine LOG] videoEl.play() warning:", pErr);
-                                    }
-                                });
-                            }
-                        };
-
-                        this.sourceBuffer.addEventListener('updateend', () => {
-                            pump();
-                        });
-
-                        const enqueue = (chunk) => {
-                            queue.push(chunk);
-                            pump();
-                        };
-
-                        // Async read loop pushes chunks to queue without blocking on appendBuffer
-                        while (true) {
-                            if (this.videoEl && this.videoEl.error) {
-                                console.error("[DVREngine LOG] video.error detected during stream read. Exiting read loop.");
-                                break;
-                            }
-                            const { done, value } = await reader.read();
-                            if (done) {
-                                console.log(`[DVREngine LOG] Chunk stream read completed. Total bytes read: ${totalBytes}`);
-                                streamFinished = true;
-                                pump();
-                                break;
-                            }
-
-                            totalBytes += value.byteLength;
-                            console.log(`[DVREngine LOG] Enqueued chunk: ${value.byteLength} bytes (Total: ${totalBytes} bytes, Queue size: ${queue.length + 1})`);
-                            enqueue(value);
-                        }
-                    } catch (e) {
-                        console.error("[DVREngine LOG] SourceBuffer creation or playback initialization FAILED:", e);
-                        console.log("[DVREngine LOG] Fallback: setting video.src directly to mediaUrl.");
-                        this.setupDirectPlayback(mediaUrl, computedLocalSeek);
-                    }
-                });
-
-                this.videoEl.src = URL.createObjectURL(this.mediaSource);
-            } else {
-                console.warn("[DVREngine LOG] MediaSource not supported or no supported MIME type found. Fallback to direct video src.");
-                this.setupDirectPlayback(mediaUrl, computedLocalSeek);
+            if (this.stateMachine) {
+                this.stateMachine.setState(DVRState.IDLE);
             }
         }
+    }
 
         setupDirectPlayback(mediaUrl, localSeekOffset) {
             this.loadedHandler = () => {
