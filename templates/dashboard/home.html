@@ -823,7 +823,7 @@
             this.stateMachine.setState(DVRState.SEEKING, { offsetSeconds });
 
             const requestId = (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') ? crypto.randomUUID() : Math.random().toString(36).substring(2, 10);
-            const targetTime = Date.now() - (Math.abs(offsetSeconds) * 1000);
+            const targetTime = this.clock.getCurrentTime() - (Math.abs(offsetSeconds) * 1000);
             const targetIso = new Date(targetTime).toISOString();
 
             console.log(`[ReqID: ${requestId}] [DVREngine LOG] Requested Offset: -${offsetSeconds}s`);
@@ -1071,7 +1071,7 @@
             this.timestampTimer = setInterval(() => {
                 const textEl = document.getElementById('playerTimestampText');
                 if (textEl && typeof formatUzbekistanTime === 'function') {
-                    let currentMs = Date.now();
+                    let currentMs = (this.dvrEngine && this.dvrEngine.clock) ? this.dvrEngine.clock.getCurrentTime() : Date.now();
                     if (this.mode === 'dvr' && this.dvrEngine && this.dvrEngine.clock) {
                         currentMs = this.dvrEngine.clock.getTime();
                     }
@@ -1098,7 +1098,8 @@
 
             this.dvrEngine.loadOffset(offsetSeconds);
 
-            const targetMs = Date.now() - (Math.abs(offsetSeconds) * 1000);
+            const currentLiveMs = (this.dvrEngine && this.dvrEngine.clock) ? this.dvrEngine.clock.getCurrentTime() : Date.now();
+            const targetMs = currentLiveMs - (Math.abs(offsetSeconds) * 1000);
             if (this.timelineEngine) {
                 this.timelineEngine.updateClock(targetMs);
             }
@@ -1129,8 +1130,9 @@
                 this.liveEngine.start();
             }
 
+            const currentLiveMs = (this.dvrEngine && this.dvrEngine.clock) ? this.dvrEngine.clock.getCurrentTime() : Date.now();
             if (this.timelineEngine) {
-                this.timelineEngine.updateClock(Date.now());
+                this.timelineEngine.updateClock(currentLiveMs);
             }
 
             this.timeDisplay.innerText = "LIVE";

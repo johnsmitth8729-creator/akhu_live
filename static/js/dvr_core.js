@@ -74,16 +74,41 @@ window.formatUzbekistanTime = formatUzbekistanTime;
 // --- 2. Playback Clock ---
 class PlaybackClock {
     constructor() {
-        this.baseTimestampMs = Date.now();
+        this.serverTimeOffsetMs = 0;
+        this.baseTimestampMs = this.getCurrentTime();
+        this.syncWithServer();
     }
+
+    async syncWithServer() {
+        try {
+            const res = await fetch('/api/dvr/time/');
+            if (res.ok) {
+                const data = await res.json();
+                if (data.server_time_ms) {
+                    this.serverTimeOffsetMs = data.server_time_ms - Date.now();
+                    this.baseTimestampMs = this.getCurrentTime();
+                    console.log(`[PlaybackClock] Server time synced! Offset: ${this.serverTimeOffsetMs} ms`);
+                }
+            }
+        } catch(e) {
+            console.warn("[PlaybackClock] Server time sync warning:", e);
+        }
+    }
+
+    getCurrentTime() {
+        return Date.now() + this.serverTimeOffsetMs;
+    }
+
     setTime(timestampMs) {
         this.baseTimestampMs = timestampMs;
     }
+
     getTime() {
         return this.baseTimestampMs;
     }
+
     getFormattedTime(mode = 'full') {
-        return formatUzbekistanTime(this.baseTimestampMs, mode);
+        return formatUzbekistanTime(this.getTime(), mode);
     }
 }
 

@@ -305,6 +305,19 @@ class DVRListView(View):
             return JsonResponse({"error": str(e)}, status=500)
 
 
+class DVRServerTimeView(View):
+    """
+    Returns current authoritative server time in Asia/Tashkent (UTC+5) for frontend clock sync.
+    """
+    def get(self, request):
+        now_tashkent = timezone.now().astimezone(pytz.timezone('Asia/Tashkent'))
+        return JsonResponse({
+            'status': 'success',
+            'server_time_iso': now_tashkent.isoformat(),
+            'server_time_ms': int(now_tashkent.timestamp() * 1000)
+        })
+
+
 class DVRGetView(View):
     """
     Django Streaming Proxy to MediaMTX Playback Get API.
