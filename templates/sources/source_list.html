@@ -437,24 +437,17 @@
                 resolve();
                 return;
             }
-            let resolved = false;
-            const done = () => {
-                if (!resolved) {
-                    resolved = true;
+            function checkState() {
+                if (pc.iceGatheringState === 'complete') {
                     pc.removeEventListener('icegatheringstatechange', checkState);
-                    pc.removeEventListener('icecandidate', checkCandidate);
                     resolve();
                 }
-            };
-            function checkState() {
-                if (pc.iceGatheringState === 'complete') done();
-            }
-            function checkCandidate(e) {
-                if (!e.candidate) done();
             }
             pc.addEventListener('icegatheringstatechange', checkState);
-            pc.addEventListener('icecandidate', checkCandidate);
-            setTimeout(done, 500);
+            setTimeout(() => {
+                pc.removeEventListener('icegatheringstatechange', checkState);
+                resolve();
+            }, 2000);
         });
     }
 
