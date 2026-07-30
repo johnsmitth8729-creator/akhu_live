@@ -923,72 +923,86 @@
 
                         const reader = response.body.getReader();
                         let totalBytes = 0;
+                        const queue = [];
+                        let streamFinished = false;
+                        let initialSeekDone = false;
 
-                        const appendChunk = async () => {
-                            // STOP IMMEDIATELY if video element has an error
+                        const pump = () => {
+                            if (!this.sourceBuffer) return;
                             if (this.videoEl && this.videoEl.error) {
-                                console.error("[DVREngine LOG] video.error detected. Halting append loop.", this.videoEl.error);
+                                console.error("[DVREngine LOG] video.error detected during pump. Stopping pump.", this.videoEl.error);
                                 return;
                             }
+                            if (this.sourceBuffer.updating) return;
 
-                            try {
-                                const { done, value } = await reader.read();
-                                if (done) {
-                                    console.log(`[DVREngine LOG] Chunk stream read completed. Total bytes read: ${totalBytes}`);
-                                    if (this.mediaSource && this.mediaSource.readyState === 'open') {
-                                        this.mediaSource.endOfStream();
-                                    }
-                                    return;
+                            if (queue.length > 0) {
+                                const chunk = queue.shift();
+                                try {
+                                    this.sourceBuffer.appendBuffer(chunk);
+                                } catch (appErr) {
+                                    console.error("[DVREngine LOG] appendBuffer EXCEPTION in pump:", appErr);
                                 }
-
-                                totalBytes += value.byteLength;
-                                console.log(`[DVREngine LOG] Read chunk: ${value.byteLength} bytes (Total: ${totalBytes} bytes)`);
-
-                                if (this.sourceBuffer && !this.sourceBuffer.updating) {
-                                    this.sourceBuffer.appendBuffer(value);
-                                } else if (this.sourceBuffer) {
-                                    await new Promise(r => this.sourceBuffer.addEventListener('updateend', r, { once: true }));
-                                    if (this.sourceBuffer && !this.videoEl.error) {
-                                        this.sourceBuffer.appendBuffer(value);
-                                    }
-                                }
-
-                                // Check video.error after appendBuffer
-                                if (this.videoEl && this.videoEl.error) {
-                                    console.error(`[DVREngine LOG] video.error code=${this.videoEl.error.code} after appendBuffer. Halting MSE loop.`);
-                                    return;
-                                }
-
-                                // Apply computed local seek offset within [0, segmentDurationSec]
-                                if (computedLocalSeek > 0 && Math.abs(this.videoEl.currentTime - computedLocalSeek) > 1) {
+                            } else if (streamFinished) {
+                                if (this.mediaSource && this.mediaSource.readyState === 'open' && !this.sourceBuffer.updating) {
                                     try {
-                                        console.log(`[DVREngine LOG] Performing local seek inside MSE buffer to ${computedLocalSeek.toFixed(2)}s (video.currentTime: ${this.videoEl.currentTime})`);
-                                        this.videoEl.currentTime = computedLocalSeek;
-                                    } catch(sErr) {
-                                        console.warn("[DVREngine LOG] Local seek warning:", sErr);
+                                        console.log("[DVREngine LOG] Queue empty & stream finished. Calling mediaSource.endOfStream().");
+                                        this.mediaSource.endOfStream();
+                                    } catch (eosErr) {
+                                        console.warn("[DVREngine LOG] endOfStream warning:", eosErr);
                                     }
                                 }
+                            }
 
-                                if (this.videoEl.paused && !this.videoEl.error) {
-                                    this.videoEl.play().catch(pErr => {
+                            // Perform local seek once buffer contains data
+                            if (!initialSeekDone && computedLocalSeek > 0 && this.sourceBuffer && !this.sourceBuffer.updating) {
+                                if (this.videoEl && this.videoEl.seekable && this.videoEl.seekable.length > 0) {
+                                    const seekTarget = Math.min(computedLocalSeek, this.videoEl.seekable.end(0));
+                                    console.log(`[DVREngine LOG] Performing local seek to ${seekTarget.toFixed(2)}s (video.currentTime: ${this.videoEl.currentTime})`);
+                                    try {
+                                        this.videoEl.currentTime = seekTarget;
+                                        initialSeekDone = true;
+                                    } catch (sErr) {
+                                        console.warn("[DVREngine LOG] Local seek error:", sErr);
+                                    }
+                                }
+                            }
+
+                            if (this.videoEl && this.videoEl.paused && !this.videoEl.error && (this.sourceBuffer && this.sourceBuffer.buffered && this.sourceBuffer.buffered.length > 0)) {
+                                this.videoEl.play().catch(pErr => {
+                                    if (pErr.name !== 'AbortError') {
                                         console.warn("[DVREngine LOG] videoEl.play() warning:", pErr);
-                                    });
-                                }
-
-                                // Continue reading ONLY if video has no error
-                                if (!this.videoEl.error) {
-                                    appendChunk();
-                                }
-                            } catch (appErr) {
-                                console.error("[DVREngine LOG] appendBuffer() EXCEPTION. Stopping MSE loop immediately:", appErr);
-                                if (this.videoEl && this.videoEl.error) {
-                                    console.error(`[DVREngine LOG] video.error.code=${this.videoEl.error.code}, message=${this.videoEl.error.message}`);
-                                }
-                                // DO NOT continue reading or appending after error!
+                                    }
+                                });
                             }
                         };
 
-                        appendChunk();
+                        this.sourceBuffer.addEventListener('updateend', () => {
+                            pump();
+                        });
+
+                        const enqueue = (chunk) => {
+                            queue.push(chunk);
+                            pump();
+                        };
+
+                        // Async read loop pushes chunks to queue without blocking on appendBuffer
+                        while (true) {
+                            if (this.videoEl && this.videoEl.error) {
+                                console.error("[DVREngine LOG] video.error detected during stream read. Exiting read loop.");
+                                break;
+                            }
+                            const { done, value } = await reader.read();
+                            if (done) {
+                                console.log(`[DVREngine LOG] Chunk stream read completed. Total bytes read: ${totalBytes}`);
+                                streamFinished = true;
+                                pump();
+                                break;
+                            }
+
+                            totalBytes += value.byteLength;
+                            console.log(`[DVREngine LOG] Enqueued chunk: ${value.byteLength} bytes (Total: ${totalBytes} bytes, Queue size: ${queue.length + 1})`);
+                            enqueue(value);
+                        }
                     } catch (e) {
                         console.error("[DVREngine LOG] SourceBuffer creation or playback initialization FAILED:", e);
                         console.log("[DVREngine LOG] Fallback: setting video.src directly to mediaUrl.");
