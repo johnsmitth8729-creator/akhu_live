@@ -9,8 +9,9 @@
 {% block extra_head %}
 <!-- Include HLS.js for fallback HLS streaming -->
 <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
-<!-- Include Phase 1 Core Modular DVR Architecture Script -->
+<!-- Include Phase 1 & Phase 2 Core Modular & Timeline Scripts -->
 <script src="{% static 'js/dvr_core.js' %}?v=2.0.0"></script>
+<script src="{% static 'js/dvr_timeline.js' %}?v=2.0.0"></script>
 <link rel="stylesheet" href="{% static 'css/player.css' %}">
 <style>
     .filter-card {
@@ -216,10 +217,10 @@
                         </button>
                     </div>
                     
-                    <!-- Scrub/Timeline Slider -->
-                    <div class="dvr-timeline-wrapper">
-                        <input type="range" class="dvr-slider" id="dvrTimelineSlider" min="-600" max="0" value="0" oninput="onTimelineSliderInput(this.value)" onchange="onTimelineSliderChange(this.value)">
-                        <span class="dvr-time-display" id="dvrTimeDisplay">LIVE</span>
+                    <!-- 60 FPS Canvas CCTV Timeline -->
+                    <div class="dvr-timeline-wrapper position-relative">
+                        <canvas id="dvrCctvTimelineCanvas" class="w-100 rounded border border-secondary border-opacity-25" style="height: 54px; cursor: pointer;"></canvas>
+                        <span class="dvr-time-display badge bg-dark bg-opacity-75 border border-secondary border-opacity-25" id="dvrTimeDisplay">LIVE</span>
                     </div>
                 </div>
             </div>
@@ -1022,7 +1023,6 @@
             const titleEl = document.getElementById('vmsPlayerModalLabel');
             if (titleEl) titleEl.innerText = name;
 
-            this.timelineSlider.value = 0;
             this.timeDisplay.innerText = "LIVE";
             this.btnGoLive.disabled = true;
             
@@ -1036,6 +1036,30 @@
             this.liveEngine.start();
 
             this.dvrEngine = new DVREngine(this.dvrVideo, streamId);
+
+            // Phase 2 Timeline Engine Initialization
+            const canvasEl = document.getElementById('dvrCctvTimelineCanvas');
+            if (canvasEl && typeof DVRTimelineEngine !== 'undefined') {
+                this.timelineModel = new TimelineModel();
+                this.timelineEngine = new DVRTimelineEngine(canvasEl, this.timelineModel, this.dvrEngine.clock, this.dvrEngine.eventBus);
+
+                // Fetch recordings and update timeline tracks
+                this.dvrEngine.provider.list(streamId).then(segments => {
+                    if (Array.isArray(segments)) {
+                        this.timelineEngine.setRecordings(segments);
+                    }
+                }).catch(e => console.warn("[VideoPlayer] Timeline recording fetch warning:", e));
+
+                // Subscribe to timeline events
+                this.dvrEngine.eventBus.on('SEEK_REQUEST', ({ timestampMs }) => {
+                    const offsetSec = (Date.now() - timestampMs) / 1000;
+                    this.shiftDVR(offsetSec);
+                });
+
+                this.dvrEngine.eventBus.on('LIVE_REQUEST', () => {
+                    this.switchToLive();
+                });
+            }
 
             if (!this.bootstrapModal) {
                 this.bootstrapModal = new bootstrap.Modal(this.modalEl);
@@ -1056,7 +1080,11 @@
 
             this.dvrEngine.loadOffset(offsetSeconds);
 
-            this.timelineSlider.value = -Math.abs(offsetSeconds);
+            const targetMs = Date.now() - (Math.abs(offsetSeconds) * 1000);
+            if (this.timelineEngine) {
+                this.timelineEngine.updateClock(targetMs);
+            }
+
             this.updateTimeDisplay(-Math.abs(offsetSeconds));
             this.btnGoLive.disabled = false;
 
@@ -1083,7 +1111,10 @@
                 this.liveEngine.start();
             }
 
-            this.timelineSlider.value = 0;
+            if (this.timelineEngine) {
+                this.timelineEngine.updateClock(Date.now());
+            }
+
             this.timeDisplay.innerText = "LIVE";
             this.btnGoLive.disabled = true;
 
