@@ -10,6 +10,8 @@ from recordings.models import LiveSession, RecordingSession, StoragePolicy, Qual
 
 logger = logging.getLogger(__name__)
 
+from django.db.models import Q
+
 class RecordingService:
     @staticmethod
     def get_mediamtx_api_url():
@@ -113,13 +115,13 @@ class RecordingService:
         """
         Atomically closes active LiveSession and RecordingSession for a stream.
         """
-        query = models.Q(status=LiveSession.Statuses.LIVE)
+        query = Q(status=LiveSession.Statuses.LIVE)
         if stream_id:
-            query &= models.Q(stream_id=stream_id)
+            query &= Q(stream_id=stream_id)
         if source:
-            query &= models.Q(source=source)
+            query &= Q(source=source)
         if camera:
-            query &= models.Q(camera=camera)
+            query &= Q(camera=camera)
 
         active_sessions = LiveSession.objects.filter(query)
         now = timezone.now()
