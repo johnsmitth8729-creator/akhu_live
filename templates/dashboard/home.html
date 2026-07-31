@@ -948,7 +948,7 @@
             console.log("computedLocalSeek:", computedLocalSeek);
             console.log("video.currentTime:", this.videoEl ? this.videoEl.currentTime : 0);
 
-            const mediaUrl = this.provider.getStreamUrl(this.streamId, segmentStartIso, segmentDurationSec);
+            const mediaUrl = this.provider.getStreamUrl(this.streamId, segmentStartIso, 7200);
             console.log("[PlaybackProvider] GET URL:", mediaUrl);
             console.log(`[ReqID: ${requestId}] [DVREngine LOG] Final Playback URL sent to MediaMTX: ${mediaUrl}`);
 
@@ -1187,10 +1187,14 @@
                 return `-${mStr}:${sStr}`;
             };
 
-            const updateUIFromPct = (pct) => {
+            const updateUIFromPct = (pct, forceUIUpdate = false) => {
                 const pctVal = `${(pct * 100).toFixed(2)}%`;
-                if (fill) fill.style.width = pctVal;
-                if (handle) handle.style.left = pctVal;
+                
+                // ONLY update red fill & dot handle if dragging or forced (click/seek)
+                if (isDragging || forceUIUpdate) {
+                    if (fill) fill.style.width = pctVal;
+                    if (handle) handle.style.left = pctVal;
+                }
 
                 const maxDVRWindowSec = 1800; // 30 mins window
                 const offsetSec = Math.round((1 - pct) * maxDVRWindowSec);
@@ -1208,6 +1212,7 @@
             };
 
             const applySeek = (pct) => {
+                updateUIFromPct(pct, true);
                 if (pct >= 0.98) {
                     this.switchToLive();
                 } else {
@@ -1221,14 +1226,14 @@
             const onMove = (e) => {
                 lastEvent = e;
                 const pct = calculatePosPct(e);
-                updateUIFromPct(pct);
+                updateUIFromPct(pct, isDragging);
             };
 
             const onStart = (e) => {
                 isDragging = true;
                 lastEvent = e;
                 const pct = calculatePosPct(e);
-                updateUIFromPct(pct);
+                updateUIFromPct(pct, true);
             };
 
             const onEnd = () => {

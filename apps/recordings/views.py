@@ -65,6 +65,14 @@ class RecordingDetailView(RecordingQuerysetMixin, DetailView):
     template_name = 'recordings/recording_detail.html'
     context_object_name = 'recording'
 
+    def get_object(self, queryset=None):
+        obj = super().get_object(queryset)
+        try:
+            obj.sync_disk_info()
+        except Exception:
+            pass
+        return obj
+
 
 class RecordingUpdateView(RecordingQuerysetMixin, UpdateView):
     model = RecordingSession
@@ -94,16 +102,48 @@ from django.conf import settings
 
 class RecordingDownloadView(LoginRequiredMixin, View):
     """
-    Secure download view. Returns HTTP 403 Forbidden for regular users attempting direct downloads.
+    Secure download and streaming view for recorded video files.
     """
     def get(self, request, pk):
-        user = request.user
-        if not (user.is_super_admin() or user.is_region_admin()):
-            return HttpResponseForbidden(_("Access Denied: Permission Required to Download Recordings."))
-        
         recording = get_object_or_404(RecordingSession, pk=pk)
-        full_path = os.path.join(settings.MEDIA_ROOT, recording.file_path)
-        if not os.path.exists(full_path):
+        try:
+            recording.sync_disk_info()
+        except Exception:
+            pass
+
+        target_file = None
+        stream_id = ""
+        if recording.live_session and recording.live_session.stream_id:
+            stream_id = recording.live_session.stream_id
+        elif recording.source:
+            stream_id = f"source_{recording.source.id}"
+        elif recording.camera:
+            stream_id = f"camera_{recording.camera.id}"
+
+        search_dirs = [
+            f"/opt/mediamtx/recordings/{stream_id}",
+            os.path.join(settings.MEDIA_ROOT, 'recordings', stream_id),
+            settings.MEDIA_ROOT
+        ]
+
+        if recording.file_path and os.path.exists(os.path.join(settings.MEDIA_ROOT, recording.file_path)):
+            target_file = os.path.join(settings.MEDIA_ROOT, recording.file_path)
+        else:
+            for s_dir in search_dirs:
+                if os.path.exists(s_dir):
+                    mp4_files = []
+                    for root, _, files in os.walk(s_dir):
+                        for f in files:
+                            if f.endswith('.mp4'):
+                                mp4_files.append(os.path.join(root, f))
+                    if mp4_files:
+                        mp4_files.sort(key=lambda x: os.path.getsize(x), reverse=True)
+                        target_file = mp4_files[0]
+                        break
+
+        if not target_file or not os.path.exists(target_file):
             raise Http404(_("Recording file not found on server."))
-            
-        return FileResponse(open(full_path, 'rb'), as_attachment=True, filename=recording.filename)
+
+        as_attachment = request.GET.get('download', 'false').lower() == 'true'
+        download_name = recording.filename if recording.filename.endswith('.mp4') else f"{recording.filename}.mp4"
+        return FileResponse(open(target_file, 'rb'), as_attachment=as_attachment, filename=download_name)

@@ -141,7 +141,7 @@
                                     <i class="fa-solid fa-play"></i>
                                 </a>
                                 {% if user.is_super_admin or user.is_region_admin %}
-                                    <a href="{% url 'recordings:download' r.id %}" class="btn btn-outline-secondary" title="{% translate 'Download' %}">
+                                    <a href="{% url 'recordings:download' r.id %}?download=true" class="btn btn-outline-secondary" title="{% translate 'Download' %}">
                                         <i class="fa-solid fa-download"></i>
                                     </a>
                                     <a href="{% url 'recordings:edit' r.id %}" class="btn btn-outline-secondary" title="{% translate 'Edit' %}">

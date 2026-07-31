@@ -186,6 +186,53 @@ class RecordingSession(models.Model):
             return f"{hrs:02d}:{mins:02d}:{secs:02d}"
         return f"{mins:02d}:{secs:02d}"
 
+    @property
+    def playback_url(self):
+        if self.file_url:
+            return self.file_url
+        return f"/en/recordings/{self.id}/download/"
+
+    def sync_disk_info(self):
+        """
+        Calculates real filesize_bytes and duration_seconds from disk files in /opt/mediamtx/recordings/<stream_id>/
+        """
+        from django.conf import settings
+        stream_id = ""
+        if self.live_session and self.live_session.stream_id:
+            stream_id = self.live_session.stream_id
+        elif self.source:
+            stream_id = f"source_{self.source.id}"
+        elif self.camera:
+            stream_id = f"camera_{self.camera.id}"
+
+        search_dirs = [
+            f"/opt/mediamtx/recordings/{stream_id}",
+            os.path.join(settings.MEDIA_ROOT, 'recordings', stream_id)
+        ]
+
+        total_bytes = 0
+
+        for d in search_dirs:
+            if os.path.exists(d):
+                for root, _, files in os.walk(d):
+                    for f in files:
+                        if f.endswith('.mp4'):
+                            fp = os.path.join(root, f)
+                            try:
+                                total_bytes += os.path.getsize(fp)
+                            except Exception:
+                                pass
+
+        if total_bytes > 0:
+            if self.filesize_bytes != total_bytes:
+                self.filesize_bytes = total_bytes
+            if self.started_at:
+                end = self.ended_at or timezone.now()
+                self.duration_seconds = max(1, int((end - self.started_at).total_seconds()))
+            self.save(update_fields=['filesize_bytes', 'duration_seconds'])
+
+        return total_bytes
+
 
 class ViewerEvent(models.Model):
     class EventTypes(models.TextChoices):
