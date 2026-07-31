@@ -86,3 +86,24 @@ class RecordingDeleteView(RecordingQuerysetMixin, DeleteView):
         recording = self.get_object()
         messages.success(request, _(f"Recording '{recording.title}' deleted successfully."))
         return super().delete(request, *args, **kwargs)
+
+
+from django.http import FileResponse, HttpResponseForbidden, Http404
+from django.views import View
+from django.conf import settings
+
+class RecordingDownloadView(LoginRequiredMixin, View):
+    """
+    Secure download view. Returns HTTP 403 Forbidden for regular users attempting direct downloads.
+    """
+    def get(self, request, pk):
+        user = request.user
+        if not (user.is_super_admin() or user.is_region_admin()):
+            return HttpResponseForbidden(_("Access Denied: Permission Required to Download Recordings."))
+        
+        recording = get_object_or_404(RecordingSession, pk=pk)
+        full_path = os.path.join(settings.MEDIA_ROOT, recording.file_path)
+        if not os.path.exists(full_path):
+            raise Http404(_("Recording file not found on server."))
+            
+        return FileResponse(open(full_path, 'rb'), as_attachment=True, filename=recording.filename)

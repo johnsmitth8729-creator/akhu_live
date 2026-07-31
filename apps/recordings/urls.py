@@ -8,6 +8,7 @@ urlpatterns = [
     path('<uuid:pk>/', views.RecordingDetailView.as_view(), name='detail'),
     path('<uuid:pk>/edit/', views.RecordingUpdateView.as_view(), name='edit'),
     path('<uuid:pk>/delete/', views.RecordingDeleteView.as_view(), name='delete'),
+    path('<uuid:pk>/download/', views.RecordingDownloadView.as_view(), name='download'),
     
     # SSE Stream & Viewer Status
     path('sse/<str:stream_id>/', sse_views.StreamSSEView.as_view(), name='sse_status'),

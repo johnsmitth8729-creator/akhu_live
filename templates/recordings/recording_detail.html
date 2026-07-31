@@ -71,11 +71,9 @@
 
             {% if user.is_super_admin or user.is_region_admin %}
             <div class="d-grid gap-2">
-                {% if recording.file_url %}
-                <a href="{{ recording.file_url }}" download class="btn btn-primary btn-sm">
+                <a href="{% url 'recordings:download' recording.id %}" class="btn btn-primary btn-sm">
                     <i class="fa-solid fa-download me-1"></i> {% translate "Download Video (MP4)" %}
                 </a>
-                {% endif %}
                 <a href="{% url 'recordings:edit' recording.id %}" class="btn btn-outline-secondary btn-sm">
                     <i class="fa-solid fa-pen me-1"></i> {% translate "Edit Metadata" %}
                 </a>
