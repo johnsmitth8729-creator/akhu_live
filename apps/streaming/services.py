@@ -34,7 +34,7 @@ class MediaMTXService:
                     creds = f"{camera.username}:{camera.password}@"
                     rtsp_url = prefix + creds + rtsp_url[len(prefix):]
                     
-        run_cmd = f"ffmpeg -rtsp_transport tcp -i {rtsp_url} -vcodec libx264 -preset ultrafast -tune zerolatency -an -f rtsp rtsp://localhost:8554/{stream_name}"
+        run_cmd = f"ffmpeg -reconnect 1 -reconnect_at_eof 1 -reconnect_streamed 1 -reconnect_delay_max 2 -rtsp_transport tcp -i {rtsp_url} -vcodec libx264 -preset ultrafast -tune zerolatency -an -f rtsp rtsp://localhost:8554/{stream_name}"
         payload = {
             "source": "publisher",
             "runOnInit": run_cmd,
