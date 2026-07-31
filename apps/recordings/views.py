@@ -96,13 +96,49 @@ class RecordingDeleteView(RecordingQuerysetMixin, DeleteView):
         return super().delete(request, *args, **kwargs)
 
 
-from django.http import FileResponse, HttpResponseForbidden, Http404
+import re
+from django.http import FileResponse, HttpResponse, HttpResponseForbidden, Http404
 from django.views import View
 from django.conf import settings
 
+def serve_file_with_range(request, file_path, content_type='video/mp4', filename='video.mp4'):
+    file_size = os.path.getsize(file_path)
+    range_header = request.META.get('HTTP_RANGE', '').strip()
+    
+    as_attachment = request.GET.get('download', 'false').lower() == 'true'
+    if as_attachment:
+        return FileResponse(open(file_path, 'rb'), as_attachment=True, filename=filename)
+
+    range_match = re.match(r'bytes=(\d+)-(\d*)', range_header)
+    if range_match:
+        first_byte = int(range_match.group(1))
+        last_byte = int(range_match.group(2)) if range_match.group(2) else file_size - 1
+        if first_byte >= file_size:
+            return HttpResponse(status=416)
+        length = last_byte - first_byte + 1
+
+        with open(file_path, 'rb') as f:
+            f.seek(first_byte)
+            data = f.read(length)
+
+        response = HttpResponse(data, status=206, content_type=content_type)
+        response['Content-Range'] = f'bytes {first_byte}-{last_byte}/{file_size}'
+        response['Accept-Ranges'] = 'bytes'
+        response['Content-Length'] = str(length)
+        return response
+
+    with open(file_path, 'rb') as f:
+        data = f.read()
+
+    response = HttpResponse(data, content_type=content_type)
+    response['Accept-Ranges'] = 'bytes'
+    response['Content-Length'] = str(file_size)
+    return response
+
+
 class RecordingDownloadView(LoginRequiredMixin, View):
     """
-    Secure download and streaming view for recorded video files.
+    Secure download and Range-enabled streaming view for recorded video files.
     """
     def get(self, request, pk):
         recording = get_object_or_404(RecordingSession, pk=pk)
@@ -144,6 +180,5 @@ class RecordingDownloadView(LoginRequiredMixin, View):
         if not target_file or not os.path.exists(target_file):
             raise Http404(_("Recording file not found on server."))
 
-        as_attachment = request.GET.get('download', 'false').lower() == 'true'
         download_name = recording.filename if recording.filename.endswith('.mp4') else f"{recording.filename}.mp4"
-        return FileResponse(open(target_file, 'rb'), as_attachment=as_attachment, filename=download_name)
+        return serve_file_with_range(request, target_file, content_type='video/mp4', filename=download_name)
