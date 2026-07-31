@@ -69,6 +69,7 @@
 
             <hr class="my-3">
 
+            {% if user.is_super_admin or user.is_region_admin %}
             <div class="d-grid gap-2">
                 {% if recording.file_url %}
                 <a href="{{ recording.file_url }}" download class="btn btn-primary btn-sm">
@@ -82,6 +83,7 @@
                     <i class="fa-solid fa-trash me-1"></i> {% translate "Delete Recording" %}
                 </a>
             </div>
+            {% endif %}
         </div>
     </div>
 </div>
