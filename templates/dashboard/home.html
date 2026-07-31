@@ -207,12 +207,20 @@
                         <video id="playerDvrVideo" playsinline class="w-100 h-100 bg-black"></video>
                     </div>
 
-                    <!-- Embedded YouTube Live Overlay Controls -->
+                    <!-- Embedded YouTube Live Overlay Controls (Image 2 & 3 Style) -->
                     <div class="yt-overlay-controls position-absolute bottom-0 start-0 end-0 p-3 z-3 d-flex flex-column gap-2" id="ytOverlayControls">
-                        <!-- Full-width Red Seek Bar & Timeline Canvas -->
-                        <div class="yt-seekbar-container position-relative w-100" style="height: 48px;">
-                            <canvas id="dvrCctvTimelineCanvas" class="w-100 rounded border border-secondary border-opacity-25 h-100" style="cursor: pointer;"></canvas>
-                            <span class="dvr-time-display badge bg-dark bg-opacity-75 border border-secondary border-opacity-25 position-absolute end-2 top-2" id="dvrTimeDisplay">LIVE</span>
+                        <!-- Image 2 Style Full-width Red Seek Bar & Hover Preview Tooltip -->
+                        <div class="yt-seekbar-container position-relative w-100 mb-1" id="ytSeekBarContainer" style="height: 36px; cursor: pointer;">
+                            <canvas id="dvrCctvTimelineCanvas" class="w-100 rounded border border-secondary border-opacity-25 h-100 d-none" style="cursor: pointer;"></canvas>
+                            <div class="yt-seekbar-track position-absolute top-50 start-0 end-0 translate-middle-y rounded-pill" style="height: 6px; background: rgba(255, 255, 255, 0.25);">
+                                <div class="yt-seekbar-fill position-absolute top-0 start-0 h-100 bg-danger rounded-pill" id="ytSeekBarFill" style="width: 100%;"></div>
+                                <div class="yt-seekbar-handle position-absolute top-50 translate-middle rounded-circle bg-danger border border-2 border-white shadow" id="ytSeekBarHandle" style="left: 100%; width: 16px; height: 16px;"></div>
+                            </div>
+                            <!-- Image 2 Hover Tooltip -->
+                            <div class="yt-preview-tooltip position-absolute bg-dark text-white rounded px-2 py-1 shadow border border-secondary z-3 d-none translate-middle-x" id="ytPreviewTooltip" style="bottom: 28px; font-size: 0.75rem;">
+                                <div class="text-center font-monospace" id="ytPreviewTime">-00:05:00</div>
+                            </div>
+                            <span class="dvr-time-display badge bg-dark bg-opacity-75 border border-secondary border-opacity-25 position-absolute end-2 top-0" id="dvrTimeDisplay" style="font-size: 0.7rem;">LIVE</span>
                         </div>
 
                         <!-- Bottom Controls Toolbar -->
@@ -1234,6 +1242,56 @@
             }
         }
 
+        togglePlayPause() {
+            const video = (this.mode === 'live') ? this.liveVideo : this.dvrVideo;
+            const icon = document.getElementById('ytPlayIcon');
+            if (!video) return;
+            if (video.paused) {
+                video.play().catch(e => console.warn("Play error:", e));
+                if (icon) icon.className = 'fa-solid fa-pause';
+            } else {
+                video.pause();
+                if (icon) icon.className = 'fa-solid fa-play';
+            }
+        }
+
+        toggleAudioMute() {
+            const video = (this.mode === 'live') ? this.liveVideo : this.dvrVideo;
+            const icon = document.getElementById('ytVolumeIcon');
+            if (!video) return;
+            video.muted = !video.muted;
+            if (icon) {
+                icon.className = video.muted ? 'fa-solid fa-volume-xmark text-danger' : 'fa-solid fa-volume-high';
+            }
+        }
+
+        selectQuality(quality) {
+            console.log(`[VideoPlayer] Quality selected: ${quality}`);
+            const btn = document.getElementById('qualitySelectBtn');
+            if (btn) btn.setAttribute('title', `Quality: ${quality}`);
+            if (this.mode === 'live' && this.liveEngine && this.liveEngine.hlsPlayer) {
+                if (quality === 'auto') {
+                    this.liveEngine.hlsPlayer.currentLevel = -1;
+                } else {
+                    const h = parseInt(quality);
+                    const idx = this.liveEngine.hlsPlayer.levels.findIndex(l => l.height === h);
+                    if (idx !== -1) this.liveEngine.hlsPlayer.currentLevel = idx;
+                }
+            }
+        }
+
+        toggleFullscreen() {
+            const viewport = document.getElementById('vmsVideoViewport') || this.modalEl;
+            if (!viewport) return;
+            if (!document.fullscreenElement) {
+                if (viewport.requestFullscreen) viewport.requestFullscreen();
+                else if (viewport.webkitRequestFullscreen) viewport.webkitRequestFullscreen();
+            } else {
+                if (document.exitFullscreen) document.exitFullscreen();
+                else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
+            }
+        }
+
         destroy() {
             if (this.timestampTimer) {
                 clearInterval(this.timestampTimer);
@@ -1259,6 +1317,40 @@
             globalVideoPlayer = new VideoPlayer();
         }
         globalVideoPlayer.open(streamId, name, whepUrl, hlsUrl);
+    }
+
+    function closePlayerModal() {
+        if (globalVideoPlayer) {
+            globalVideoPlayer.destroy();
+        }
+    }
+
+    function switchToLive() {
+        if (globalVideoPlayer) {
+            globalVideoPlayer.switchToLive();
+        }
+    }
+
+    function shiftDVR(seconds) {
+        if (globalVideoPlayer) {
+            globalVideoPlayer.shiftDVR(seconds);
+        }
+    }
+
+    function togglePlayPause() {
+        if (globalVideoPlayer) globalVideoPlayer.togglePlayPause();
+    }
+
+    function toggleAudioMute() {
+        if (globalVideoPlayer) globalVideoPlayer.toggleAudioMute();
+    }
+
+    function selectPlayerQuality(quality) {
+        if (globalVideoPlayer) globalVideoPlayer.selectQuality(quality);
+    }
+
+    function togglePlayerModalFullscreen() {
+        if (globalVideoPlayer) globalVideoPlayer.toggleFullscreen();
     }
 
     function closePlayerModal() {
