@@ -1151,10 +1151,120 @@
                 }
             }, 200);
 
+            // Initialize Red Seekbar Drag & Seek (Image 2 Style)
+            this.initSeekBar();
+
             if (!this.bootstrapModal) {
                 this.bootstrapModal = new bootstrap.Modal(this.modalEl);
             }
             this.bootstrapModal.show();
+        }
+
+        initSeekBar() {
+            const container = document.getElementById('ytSeekBarContainer');
+            const fill = document.getElementById('ytSeekBarFill');
+            const handle = document.getElementById('ytSeekBarHandle');
+            const tooltip = document.getElementById('ytPreviewTooltip');
+            const timeTxt = document.getElementById('ytPreviewTime');
+            if (!container) return;
+
+            let isDragging = false;
+            let lastEvent = null;
+
+            const calculatePosPct = (e) => {
+                const rect = container.getBoundingClientRect();
+                const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+                let pct = (clientX - rect.left) / rect.width;
+                return Math.max(0, Math.min(1, pct));
+            };
+
+            const formatOffsetLabel = (offsetSec) => {
+                const sec = Math.abs(Math.round(offsetSec));
+                const mins = Math.floor(sec / 60);
+                const rSec = sec % 60;
+                const mStr = String(mins).padStart(2, '0');
+                const sStr = String(rSec).padStart(2, '0');
+                return `-${mStr}:${sStr}`;
+            };
+
+            const updateUIFromPct = (pct) => {
+                const pctVal = `${(pct * 100).toFixed(2)}%`;
+                if (fill) fill.style.width = pctVal;
+                if (handle) handle.style.left = pctVal;
+
+                const maxDVRWindowSec = 1800; // 30 mins window
+                const offsetSec = Math.round((1 - pct) * maxDVRWindowSec);
+
+                if (tooltip && timeTxt) {
+                    tooltip.style.left = pctVal;
+                    tooltip.classList.remove('d-none');
+                    if (pct >= 0.98) {
+                        timeTxt.innerText = "LIVE";
+                    } else {
+                        timeTxt.innerText = formatOffsetLabel(offsetSec);
+                    }
+                }
+                return offsetSec;
+            };
+
+            const applySeek = (pct) => {
+                if (pct >= 0.98) {
+                    this.switchToLive();
+                } else {
+                    const maxDVRWindowSec = 1800;
+                    const offsetSec = Math.round((1 - pct) * maxDVRWindowSec);
+                    console.log(`[SeekBar Drag/Click] Seeking to offset -${offsetSec}s (pct: ${(pct*100).toFixed(1)}%)`);
+                    this.shiftDVR(offsetSec);
+                }
+            };
+
+            const onMove = (e) => {
+                lastEvent = e;
+                const pct = calculatePosPct(e);
+                updateUIFromPct(pct);
+            };
+
+            const onStart = (e) => {
+                isDragging = true;
+                lastEvent = e;
+                const pct = calculatePosPct(e);
+                updateUIFromPct(pct);
+            };
+
+            const onEnd = () => {
+                if (isDragging && lastEvent) {
+                    isDragging = false;
+                    const pct = calculatePosPct(lastEvent);
+                    applySeek(pct);
+                    lastEvent = null;
+                }
+            };
+
+            container.onmousedown = onStart;
+            container.ontouchstart = onStart;
+
+            window.onmousemove = (e) => {
+                if (isDragging) {
+                    onMove(e);
+                } else if (container.contains(e.target)) {
+                    onMove(e);
+                }
+            };
+
+            window.ontouchmove = (e) => {
+                if (isDragging) {
+                    onMove(e);
+                }
+            };
+
+            window.onmouseup = onEnd;
+            window.ontouchend = onEnd;
+
+            container.onmouseleave = () => {
+                if (!isDragging && tooltip) {
+                    tooltip.classList.add('d-none');
+                }
+            };
         }
 
         shiftDVR(offsetSeconds) {
@@ -1175,6 +1285,14 @@
             if (this.timelineEngine) {
                 this.timelineEngine.updateClock(targetMs);
             }
+
+            // Sync Red Seekbar Fill & Handle position
+            const maxDVRWindowSec = 1800;
+            const pct = Math.max(0, Math.min(1, 1 - (Math.abs(offsetSeconds) / maxDVRWindowSec)));
+            const fill = document.getElementById('ytSeekBarFill');
+            const handle = document.getElementById('ytSeekBarHandle');
+            if (fill) fill.style.width = `${(pct * 100).toFixed(2)}%`;
+            if (handle) handle.style.left = `${(pct * 100).toFixed(2)}%`;
 
             this.updateTimeDisplay(-Math.abs(offsetSeconds));
             this.btnGoLive.disabled = false;
@@ -1206,6 +1324,12 @@
             if (this.timelineEngine) {
                 this.timelineEngine.updateClock(currentLiveMs);
             }
+
+            // Sync Red Seekbar Fill & Handle position to 100% LIVE
+            const fill = document.getElementById('ytSeekBarFill');
+            const handle = document.getElementById('ytSeekBarHandle');
+            if (fill) fill.style.width = '100%';
+            if (handle) handle.style.left = '100%';
 
             this.timeDisplay.innerText = "LIVE";
             this.btnGoLive.disabled = true;
