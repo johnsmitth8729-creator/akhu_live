@@ -551,6 +551,17 @@
             {% endfor %}
         {% endfor %}
 
+        // Event delegation for camera card click -> open player modal
+        document.addEventListener('click', (e) => {
+            const card = e.target.closest('.btn-watch-camera');
+            if (!card) return;
+            const streamId = card.dataset.streamId;
+            const name = card.dataset.streamName || 'Camera';
+            const whepUrl = resolveDynamicUrl(card.dataset.whepUrl || '');
+            const hlsUrl  = resolveDynamicUrl(card.dataset.hlsUrl  || '');
+            window.openPlayerModal(streamId, name, whepUrl, hlsUrl);
+        });
+
         // Background Status Polling (every 3 seconds)
         setInterval(checkStatusesAsync, 3000);
     });
@@ -987,14 +998,14 @@
             const titleEl = document.getElementById('vmsPlayerModalLabel');
             if (titleEl) titleEl.innerText = name;
 
-            this.timeDisplay.innerText = "LIVE";
-            this.btnGoLive.disabled = true;
+            if (this.timeDisplay) this.timeDisplay.innerText = "LIVE";
+            if (this.btnGoLive) this.btnGoLive.disabled = true;
             
-            this.statusBadge.className = "vms-player-status-badge status-live";
-            this.statusText.innerText = "LIVE";
+            if (this.statusBadge) this.statusBadge.className = "vms-player-status-badge status-live";
+            if (this.statusText) this.statusText.innerText = "LIVE";
 
-            this.liveEngineContainer.classList.add('engine-active');
-            this.dvrEngineContainer.classList.remove('engine-active');
+            if (this.liveEngineContainer) this.liveEngineContainer.classList.add('engine-active');
+            if (this.dvrEngineContainer) this.dvrEngineContainer.classList.remove('engine-active');
 
             this.liveEngine = new LiveEngine(this.liveVideo, whepUrl, hlsUrl, streamId);
             this.liveEngine.start();
@@ -1016,8 +1027,6 @@
 
                 // Subscribe to timeline events
                 this.dvrEngine.eventBus.on('SEEK_REQUEST', ({ timestampMs }) => {
-                    console.log("[DVREventBus] SEEK_REQUEST emitted, timestampMs:", timestampMs);
-                    console.log("[DVREngine] SEEK_REQUEST received");
                     const currentLiveMs = (this.dvrEngine && this.dvrEngine.clock) ? this.dvrEngine.clock.getCurrentTime() : Date.now();
                     const offsetSec = (currentLiveMs - timestampMs) / 1000;
                     this.shiftDVR(offsetSec);
@@ -1170,8 +1179,8 @@
                 this.liveEngine.stop();
             }
 
-            this.liveEngineContainer.classList.remove('engine-active');
-            this.dvrEngineContainer.classList.add('engine-active');
+            if (this.liveEngineContainer) this.liveEngineContainer.classList.remove('engine-active');
+            if (this.dvrEngineContainer) this.dvrEngineContainer.classList.add('engine-active');
 
             this.dvrEngine.loadOffset(offsetSeconds);
 
@@ -1190,10 +1199,10 @@
             if (handle) handle.style.left = `${(pct * 100).toFixed(2)}%`;
 
             this.updateTimeDisplay(-Math.abs(offsetSeconds));
-            this.btnGoLive.disabled = false;
+            if (this.btnGoLive) this.btnGoLive.disabled = false;
 
-            this.statusBadge.className = "vms-player-status-badge status-dvr";
-            this.statusText.innerText = `-${this.formatTimeLabel(offsetSeconds)}`;
+            if (this.statusBadge) this.statusBadge.className = "vms-player-status-badge status-dvr";
+            if (this.statusText) this.statusText.innerText = `-${this.formatTimeLabel(offsetSeconds)}`;
 
             document.querySelectorAll('.dvr-quick-shifts .dvr-quick-btn').forEach(btn => {
                 btn.classList.remove('active');
@@ -1208,8 +1217,8 @@
                 this.dvrEngine.stop();
             }
 
-            this.dvrEngineContainer.classList.remove('engine-active');
-            this.liveEngineContainer.classList.add('engine-active');
+            if (this.dvrEngineContainer) this.dvrEngineContainer.classList.remove('engine-active');
+            if (this.liveEngineContainer) this.liveEngineContainer.classList.add('engine-active');
 
             if (this.liveEngine) {
                 this.liveEngine.start();
@@ -1226,19 +1235,21 @@
             if (fill) fill.style.width = '100%';
             if (handle) handle.style.left = '100%';
 
-            this.timeDisplay.innerText = "LIVE";
-            this.btnGoLive.disabled = true;
+            if (this.timeDisplay) this.timeDisplay.innerText = "LIVE";
+            if (this.btnGoLive) this.btnGoLive.disabled = true;
 
-            this.statusBadge.className = "vms-player-status-badge status-live";
-            this.statusText.innerText = "LIVE";
+            if (this.statusBadge) this.statusBadge.className = "vms-player-status-badge status-live";
+            if (this.statusText) this.statusText.innerText = "LIVE";
 
             document.querySelectorAll('.dvr-quick-shifts .dvr-quick-btn').forEach(btn => {
                 btn.classList.remove('active');
             });
-            document.getElementById('btnShiftLive').classList.add('active');
+            const liveBtn = document.getElementById('btnShiftLive');
+            if (liveBtn) liveBtn.classList.add('active');
         }
 
         updateTimeDisplay(offsetSeconds) {
+            if (!this.timeDisplay) return;
             if (offsetSeconds === 0) {
                 this.timeDisplay.innerText = "LIVE";
             } else {
