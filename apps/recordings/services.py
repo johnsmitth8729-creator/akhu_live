@@ -52,7 +52,13 @@ class RecordingService:
                 camera.last_seen = timezone.now()
                 camera.save(update_fields=['status', 'last_seen'])
 
-            # Close any orphaned active sessions for this stream_id
+            # Check if an active LiveSession already exists for this stream_id
+            existing_session = LiveSession.objects.filter(stream_id=stream_id, status=LiveSession.Statuses.LIVE).first()
+            if existing_session and hasattr(existing_session, 'recording_session') and existing_session.recording_session:
+                logger.info(f"Reusing active LiveSession {existing_session.id} & RecordingSession {existing_session.recording_session.id} for {stream_id}")
+                return existing_session, existing_session.recording_session
+
+            # Close any orphaned active sessions for this stream_id if not reusable
             cls.end_live_session(stream_id=stream_id)
 
             now = timezone.now()
