@@ -214,6 +214,7 @@
                             <button class="dvr-quick-btn" onclick="shiftDVR(5)">-5 sec</button>
                             <button class="dvr-quick-btn" onclick="shiftDVR(20)">-20 sec</button>
                             <button class="dvr-quick-btn" onclick="shiftDVR(60)">-1 min</button>
+                            <button class="dvr-quick-btn" onclick="shiftDVR(600)">-10 min</button>
                         </div>
                         
                         <!-- Go Live Action Button -->
@@ -353,6 +354,15 @@
                     type: 'answer',
                     sdp: answerSdp
                 }));
+            } else if (response.status === 404) {
+                console.warn(`[WHEP ${this.cameraId}] Stream offline / path not found (HTTP 404).`);
+                this.isConnecting = false;
+                if (this.connectionTimeout) {
+                    clearTimeout(this.connectionTimeout);
+                    this.connectionTimeout = null;
+                }
+                const badgeText = document.getElementById('playerStatusText');
+                if (badgeText) badgeText.innerText = 'OFFLINE';
             } else {
                 throw new Error(`WHEP error: HTTP ${response.status}`);
             }
