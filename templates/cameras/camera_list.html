@@ -149,9 +149,11 @@
         </nav>
     </div>
 {% endif %}
+{% include "includes/player_modal.html" %}
 {% endblock %}
 
 {% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
 <script>
     function checkCameraStatusAsync(cameraId) {
         const icon = document.getElementById(`check-icon-${cameraId}`);
@@ -181,6 +183,42 @@
             icon.classList.remove('fa-spin');
             console.error("Connectivity check failed:", err);
         });
+    }
+
+    function openPlayerModal(streamId, name, whepUrl, hlsUrl) {
+        const modalEl = document.getElementById('vmsPlayerModal');
+        if (!modalEl) return;
+        const titleEl = document.getElementById('vmsPlayerModalLabel');
+        if (titleEl) titleEl.innerText = name;
+
+        const liveVideo = document.getElementById('playerLiveVideo');
+        if (liveVideo) {
+            if (Hls.isSupported() && hlsUrl) {
+                if (window.modalHls) window.modalHls.destroy();
+                window.modalHls = new Hls({ maxMaxBufferLength: 5 });
+                window.modalHls.loadSource(hlsUrl);
+                window.modalHls.attachMedia(liveVideo);
+                window.modalHls.on(Hls.Events.MANIFEST_PARSED, () => liveVideo.play().catch(() => {}));
+            } else {
+                liveVideo.src = hlsUrl || whepUrl;
+                liveVideo.play().catch(() => {});
+            }
+        }
+
+        const modal = new bootstrap.Modal(modalEl);
+        modal.show();
+    }
+
+    function closePlayerModal() {
+        const liveVideo = document.getElementById('playerLiveVideo');
+        if (liveVideo) {
+            liveVideo.pause();
+            liveVideo.src = '';
+        }
+        if (window.modalHls) {
+            window.modalHls.destroy();
+            window.modalHls = null;
+        }
     }
 </script>
 {% endblock %}
