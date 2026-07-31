@@ -279,6 +279,37 @@
             }
             return urlStr;
         }
+
+        let viewportIdleTimer = null;
+        function handleViewportMouseMove(viewport) {
+            if (!viewport) return;
+            viewport.classList.remove('user-idle');
+            if (viewportIdleTimer) clearTimeout(viewportIdleTimer);
+            viewportIdleTimer = setTimeout(() => {
+                viewport.classList.add('user-idle');
+            }, 2500);
+        }
+
+        function setPlayerVolume(vol) {
+            const v = parseFloat(vol);
+            const liveVid = document.getElementById('playerLiveVideo');
+            const dvrVid = document.getElementById('playerDvrVideo');
+            if (liveVid) {
+                liveVid.volume = v;
+                liveVid.muted = (v === 0);
+            }
+            if (dvrVid) {
+                dvrVid.volume = v;
+                dvrVid.muted = (v === 0);
+            }
+
+            const icon = document.getElementById('ytVolumeIcon');
+            if (icon) {
+                if (v === 0) icon.className = 'fa-solid fa-volume-xmark text-danger';
+                else if (v < 0.5) icon.className = 'fa-solid fa-volume-low';
+                else icon.className = 'fa-solid fa-volume-high';
+            }
+        }
     </script>
     
     <!-- Clock & Theme Toggle Scripts -->

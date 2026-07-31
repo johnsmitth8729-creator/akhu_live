@@ -303,3 +303,27 @@
     box-shadow: 0 0 8px #ef4444;
     animation: live-pulse 1.5s infinite;
 }
+
+/* Auto-hide overlay controls on mouse idle (in fullscreen or windowed) */
+.vms-video-viewport.user-idle .yt-overlay-controls,
+.vms-video-viewport.user-idle #playerTimestampOverlay {
+    opacity: 0 !important;
+    pointer-events: none !important;
+    transition: opacity 0.4s ease;
+}
+
+/* Smooth Interactive Volume Slider */
+.yt-volume-slider {
+    width: 0px;
+    opacity: 0;
+    transition: width 0.25s ease, opacity 0.25s ease;
+    margin: 0;
+}
+
+.yt-volume-group:hover .yt-volume-slider,
+.yt-volume-slider:focus,
+.yt-volume-slider:active {
+    width: 75px !important;
+    opacity: 1 !important;
+    margin-left: 6px;
+}
