@@ -36,7 +36,8 @@ class MediaMTXService:
                     
         payload = {
             "source": rtsp_url,
-            "sourceOnDemand": True
+            "sourceOnDemand": True,
+            "record": False
         }
         
         timeout = 3

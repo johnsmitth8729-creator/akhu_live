@@ -757,7 +757,7 @@
                     console.warn("Live WebRTC negotiation timeout. Triggering fallback.");
                     this.triggerHlsFallback();
                 }
-            }, 12000);
+            }, 2500);
 
             this.peerConnection.ontrack = (event) => {
                 this.videoEl.srcObject = event.streams[0];

@@ -109,13 +109,9 @@
                     <td class="small text-muted" id="last-seen-{{ c.id }}">{{ c.last_seen|date:"Y-m-d H:i"|default:"Never" }}</td>
                     <td class="text-end px-4">
                         <div class="btn-group gap-1">
-                            <!-- Start / Stop RTSP publish on MediaMTX -->
-                            <form action="{% if c.status == 'online' %}{% url 'cameras:stop_stream' c.id %}{% else %}{% url 'cameras:start_stream' c.id %}{% endif %}" method="post" class="m-0">
-                                {% csrf_token %}
-                                <button type="submit" class="btn btn-sm {% if c.status == 'online' %}btn-outline-danger{% else %}btn-outline-success{% endif %}" title="{% if c.status == 'online' %}{% translate 'Stop Stream' %}{% else %}{% translate 'Start Stream' %}{% endif %}">
-                                    <i class="fa-solid {% if c.status == 'online' %}fa-pause{% else %}fa-play{% endif %}"></i>
-                                </button>
-                            </form>
+                            <button type="button" class="btn btn-sm btn-outline-primary" onclick="openPlayerModal('camera_{{ c.id }}', '{{ c.name|escapejs }}', resolveDynamicUrl('https://live.akhu.uz/webrtc/camera_{{ c.id }}/whep'), resolveDynamicUrl('https://live.akhu.uz/hls/camera_{{ c.id }}/index.m3u8'))" title="{% translate 'Watch Live Stream' %}">
+                                <i class="fa-solid fa-eye"></i>
+                            </button>
                             <a href="{% url 'cameras:edit' c.id %}" class="btn btn-sm btn-outline-secondary" title="{% translate 'Edit Details' %}">
                                 <i class="fa-solid fa-pen-to-square"></i>
                             </a>
