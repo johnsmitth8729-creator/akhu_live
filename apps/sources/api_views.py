@@ -157,18 +157,29 @@ class StartStreamAPIView(APIView):
         if source.source_type == LiveSource.SourceTypes.IP_CAMERA:
             register_rtsp_source_path(source)
             
-        source.status = LiveSource.Statuses.ONLINE
+        source.status = LiveSource.Statuses.RECORDING
+        source.recording_enabled = True
         source.last_connected = timezone.now()
         source.save()
         
+        # Start LiveSession & RecordingSession atomically
+        from recordings.services import RecordingService
+        live_session, rec_session = RecordingService.start_live_session(source=source, user=request.user)
+
         ActivityLog.objects.create(
             user=request.user,
             action='source_stream_started',
-            description=f"Stream session started on source '{source.name}' ({source.get_source_type_display()}).",
+            description=f"Stream session & recording started on source '{source.name}' ({source.get_source_type_display()}). Session ID: {live_session.id}",
             ip_address=request.META.get('REMOTE_ADDR')
         )
         
-        return Response({'status': 'ok', 'source_status': source.status})
+        return Response({
+            'status': 'ok',
+            'source_status': source.status,
+            'live_session_id': str(live_session.id),
+            'recording_session_id': str(rec_session.id),
+            'stream_id': f"source_{source.id}"
+        })
 
 
 class StopStreamAPIView(APIView):
@@ -192,6 +203,10 @@ class StopStreamAPIView(APIView):
         source.status = LiveSource.Statuses.IDLE
         source.last_disconnected = timezone.now()
         source.save()
+
+        # End LiveSession & RecordingSession
+        from recordings.services import RecordingService
+        RecordingService.end_live_session(source=source)
         
         ActivityLog.objects.create(
             user=request.user,

@@ -85,6 +85,7 @@ INSTALLED_APPS = [
     'core.apps.CoreConfig',
     'screens.apps.ScreensConfig',
     'sources.apps.SourcesConfig',
+    'recordings.apps.RecordingsConfig',
 ]
 
 MIDDLEWARE = [

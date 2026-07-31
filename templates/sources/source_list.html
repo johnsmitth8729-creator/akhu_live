@@ -118,9 +118,15 @@
                     </div>
                     
                     {% if request.user.is_staff %}
-                    <!-- Metrics Timer Overlay -->
-                    <div class="position-absolute bottom-2 start-2 bg-dark bg-opacity-75 px-2 py-0.5 rounded small text-white" id="stats-overlay-{{ s.id }}" style="display: none; font-size: 0.65rem;">
-                        <span>Timer: <strong id="rec-timer-{{ s.id }}">00:00:00</strong></span>
+                    <!-- Broadcaster Dashboard Telemetry Metrics Overlay -->
+                    <div class="position-absolute bottom-2 start-2 bg-dark bg-opacity-75 px-2 py-1 rounded small text-white" id="stats-overlay-{{ s.id }}" style="display: none; font-size: 0.68rem; backdrop-filter: blur(4px);">
+                        <div class="d-flex align-items-center gap-2">
+                            <span><i class="fa-solid fa-clock text-warning"></i> <strong id="rec-timer-{{ s.id }}">00:00:00</strong></span>
+                            <span>|</span>
+                            <span><i class="fa-solid fa-eye text-info"></i> <strong id="sse-viewers-{{ s.id }}">0</strong> viewers</span>
+                            <span>|</span>
+                            <span class="text-success"><i class="fa-solid fa-signal"></i> 30fps / 2.5Mbps</span>
+                        </div>
                     </div>
                     {% endif %}
                     

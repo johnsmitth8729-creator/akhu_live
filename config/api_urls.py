@@ -6,6 +6,8 @@ from sources import api_views as sources_api
 
 from dashboard import views as dashboard_views
 
+from recordings import api_views as recordings_api
+
 app_name = 'api'
 
 router = DefaultRouter()
@@ -17,6 +19,7 @@ router.register('logs', api_views.ActivityLogViewSet, basename='logs')
 router.register('screens', screens_api.ComputerViewSet, basename='screens')
 router.register('live-sources', sources_api.LiveSourceViewSet, basename='live-sources')
 router.register('recordings', sources_api.RecordingViewSet, basename='recordings')
+router.register('recording-sessions', recordings_api.RecordingSessionViewSet, basename='recording-sessions')
 
 urlpatterns = [
     path('health/', api_views.HealthCheckAPIView.as_view(), name='health'),
@@ -34,5 +37,7 @@ urlpatterns = [
     path('dvr/time/', dashboard_views.DVRServerTimeView.as_view(), name='dvr_time'),
     path('dvr/<str:stream_id>/list/', dashboard_views.DVRListView.as_view(), name='dvr_list'),
     path('dvr/<str:stream_id>/get/', dashboard_views.DVRGetView.as_view(), name='dvr_get'),
+    path('dvr/<str:stream_id>/master.m3u8', recordings_api.DVRMasterPlaylistAPIView.as_view(), name='dvr_master_playlist'),
+    path('storage-policy/', recordings_api.StoragePolicyAPIView.as_view(), name='storage_policy'),
     path('', include(router.urls)),
 ]
