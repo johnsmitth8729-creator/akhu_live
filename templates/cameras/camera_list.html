@@ -109,7 +109,7 @@
                     <td class="small text-muted" id="last-seen-{{ c.id }}">{{ c.last_seen|date:"Y-m-d H:i"|default:"Never" }}</td>
                     <td class="text-end px-4">
                         <div class="btn-group gap-1">
-                            <button type="button" class="btn btn-sm btn-outline-primary" onclick="openPlayerModal('camera_{{ c.id }}', '{{ c.name|escapejs }}', resolveDynamicUrl('https://live.akhu.uz/webrtc/camera_{{ c.id }}/whep'), resolveDynamicUrl('https://live.akhu.uz/hls/camera_{{ c.id }}/index.m3u8'))" title="{% translate 'Watch Live Stream' %}">
+                            <button type="button" class="btn btn-sm btn-outline-primary btn-watch-camera" data-stream-id="camera_{{ c.id }}" data-stream-name="{{ c.name }}" data-whep-url="https://live.akhu.uz/webrtc/camera_{{ c.id }}/whep" data-hls-url="https://live.akhu.uz/hls/camera_{{ c.id }}/index.m3u8" title="{% translate 'Watch Live Stream' %}">
                                 <i class="fa-solid fa-eye"></i>
                             </button>
                             <a href="{% url 'cameras:edit' c.id %}" class="btn btn-sm btn-outline-secondary" title="{% translate 'Edit Details' %}">
@@ -185,7 +185,7 @@
         });
     }
 
-    function openPlayerModal(streamId, name, whepUrl, hlsUrl) {
+    window.openPlayerModal = function(streamId, name, whepUrl, hlsUrl) {
         const modalEl = document.getElementById('vmsPlayerModal');
         if (!modalEl) return;
         const titleEl = document.getElementById('vmsPlayerModalLabel');
@@ -207,9 +207,9 @@
 
         const modal = new bootstrap.Modal(modalEl);
         modal.show();
-    }
+    };
 
-    function closePlayerModal() {
+    window.closePlayerModal = function() {
         const liveVideo = document.getElementById('playerLiveVideo');
         if (liveVideo) {
             liveVideo.pause();
@@ -219,6 +219,20 @@
             window.modalHls.destroy();
             window.modalHls = null;
         }
-    }
+    };
+
+    document.addEventListener('click', function(e) {
+        const btn = e.target.closest('.btn-watch-camera');
+        if (btn) {
+            e.preventDefault();
+            const streamId = btn.getAttribute('data-stream-id');
+            const name = btn.getAttribute('data-stream-name');
+            const whepRaw = btn.getAttribute('data-whep-url');
+            const hlsRaw = btn.getAttribute('data-hls-url');
+            const whepUrl = typeof resolveDynamicUrl === 'function' ? resolveDynamicUrl(whepRaw) : whepRaw;
+            const hlsUrl = typeof resolveDynamicUrl === 'function' ? resolveDynamicUrl(hlsRaw) : hlsRaw;
+            window.openPlayerModal(streamId, name, whepUrl, hlsUrl);
+        }
+    });
 </script>
 {% endblock %}
