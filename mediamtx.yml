@@ -27,8 +27,8 @@ writeTimeout: 10s
 writeQueueSize: 2048
 # Maximum size of outgoing UDP payloads.
 udpMaxPayloadSize: 1452
-# Size of the read buffer of every UDP socket (16MB for high throughput).
-udpReadBufferSize: 16777216
+# Size of the read buffer of every UDP socket (0 = OS default).
+udpReadBufferSize: 0
 
 runOnConnect:
 runOnConnectRestart: false
