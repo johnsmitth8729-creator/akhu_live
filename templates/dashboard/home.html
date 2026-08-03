@@ -1387,11 +1387,20 @@
     let globalVideoPlayer = null;
 
     window.openPlayerModal = function(streamId, name, whepUrl, hlsUrl) {
+        // Resume WebAudio AudioContext synchronously on user click gesture (bypasses iOS hardware silent switch)
+        if (window.AudioContext || window.webkitAudioContext) {
+            try {
+                const ctx = new (window.AudioContext || window.webkitAudioContext)();
+                if (ctx.state === 'suspended') ctx.resume();
+            } catch (e) {}
+        }
+
         // Synchronously unlock audio context on playerLiveVideo inside user click gesture tick
         const liveVid = document.getElementById('playerLiveVideo');
         if (liveVid) {
             liveVid.muted = false;
             liveVid.volume = 1.0;
+            liveVid.play().catch(() => {});
         }
         if (!globalVideoPlayer) {
             globalVideoPlayer = new VideoPlayer();

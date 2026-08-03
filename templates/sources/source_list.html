@@ -645,26 +645,72 @@
                 let stream = null;
                 const audioConstraints = { echoCancellation: true, noiseSuppression: true };
                 
-                 if (sourceType === 'WEBCAM') {
+                if (sourceType === 'WEBCAM') {
                     const facing = cameraFacingModes[sourceId] || 'environment';
                     const orientation = getDeviceOrientation();
                     const isLandscape = orientation === 'landscape';
                     const idealWidth = isLandscape ? 1280 : 720;
                     const idealHeight = isLandscape ? 720 : 1280;
-                    stream = await navigator.mediaDevices.getUserMedia({ 
-                        video: { 
-                            width: { ideal: idealWidth },
-                            height: { ideal: idealHeight },
-                            facingMode: { ideal: facing },
-                            frameRate: { ideal: 15, max: 20 }
-                        }, 
-                        audio: audioConstraints 
-                    });
+                    
+                    try {
+                        stream = await navigator.mediaDevices.getUserMedia({ 
+                            video: { 
+                                width: { ideal: idealWidth },
+                                height: { ideal: idealHeight },
+                                facingMode: { ideal: facing },
+                                frameRate: { ideal: 15, max: 20 }
+                            }, 
+                            audio: audioConstraints 
+                        });
+                    } catch (audioErr) {
+                        console.warn(`[Source ${sourceId}] getUserMedia with audio constraints failed, trying simple audio: true`, audioErr);
+                        try {
+                            stream = await navigator.mediaDevices.getUserMedia({ 
+                                video: { 
+                                    width: { ideal: idealWidth },
+                                    height: { ideal: idealHeight },
+                                    facingMode: { ideal: facing },
+                                    frameRate: { ideal: 15, max: 20 }
+                                }, 
+                                audio: true 
+                            });
+                        } catch (simpleErr) {
+                            console.warn(`[Source ${sourceId}] getUserMedia with audio: true failed, capturing video only:`, simpleErr);
+                            stream = await navigator.mediaDevices.getUserMedia({ 
+                                video: { 
+                                    width: { ideal: idealWidth },
+                                    height: { ideal: idealHeight },
+                                    facingMode: { ideal: facing },
+                                    frameRate: { ideal: 15, max: 20 }
+                                }, 
+                                audio: false 
+                            });
+                        }
+                    }
                 } else if (sourceType === 'SCREEN_SHARE' || sourceType === 'WEB_BROWSER') {
-                    stream = await navigator.mediaDevices.getDisplayMedia({ 
-                        video: true, 
-                        audio: audioConstraints 
-                    });
+                    try {
+                        stream = await navigator.mediaDevices.getDisplayMedia({ 
+                            video: true, 
+                            audio: audioConstraints 
+                        });
+                    } catch (e) {
+                        stream = await navigator.mediaDevices.getDisplayMedia({ video: true });
+                    }
+                }
+
+                // If stream was captured without audio track, attempt separate mic capture
+                if (stream && stream.getAudioTracks().length === 0) {
+                    console.warn(`[Source ${sourceId}] Main stream missing audio track. Attempting separate microphone capture...`);
+                    try {
+                        const micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                        const micTrack = micStream.getAudioTracks()[0];
+                        if (micTrack) {
+                            stream.addTrack(micTrack);
+                            console.log(`[Source ${sourceId}] Successfully added separate microphone audio track!`);
+                        }
+                    } catch (micErr) {
+                        console.error(`[Source ${sourceId}] Separate microphone capture failed:`, micErr);
+                    }
                 }
 
                 localStreams[sourceId] = stream;
