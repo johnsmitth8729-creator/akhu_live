@@ -249,14 +249,7 @@
     <!-- Bootstrap 5.3 Bundle with Popper -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
     
-    <!-- DVR API Global Configuration (Django Absolute URLs) -->
     <script>
-        window.DVR_CONFIG = {
-            timeUrl: "{% url 'api:dvr_time' %}",
-            listUrlTemplate: "{% url 'api:dvr_list' stream_id='STREAM_ID_PLACEHOLDER' %}",
-            getUrlTemplate: "{% url 'api:dvr_get' stream_id='STREAM_ID_PLACEHOLDER' %}"
-        };
-
         function resolveDynamicUrl(urlStr) {
             if (!urlStr) return urlStr;
             const isProd = window.location.protocol === 'https:' || !['localhost', '127.0.0.1'].includes(window.location.hostname);
@@ -288,14 +281,9 @@
         function setPlayerVolume(vol) {
             const v = parseFloat(vol);
             const liveVid = document.getElementById('playerLiveVideo');
-            const dvrVid = document.getElementById('playerDvrVideo');
             if (liveVid) {
                 liveVid.volume = v;
                 liveVid.muted = (v === 0);
-            }
-            if (dvrVid) {
-                dvrVid.volume = v;
-                dvrVid.muted = (v === 0);
             }
 
             const icon = document.getElementById('ytVolumeIcon');
@@ -309,28 +297,11 @@
     
     <!-- Clock & Theme Toggle Scripts -->
     <script>
-        // Live system clock running in topbar (Asia/Tashkent Timezone + Server Sync)
-        let serverClockOffsetMs = 0;
-        
-        async function syncHeaderClockWithServer() {
-            try {
-                const res = await fetch(window.DVR_CONFIG.timeUrl);
-                if (res.ok) {
-                    const data = await res.json();
-                    if (data.server_time_ms) {
-                        serverClockOffsetMs = data.server_time_ms - Date.now();
-                    }
-                }
-            } catch (e) {
-                console.warn("[HeaderClock] Server sync failed:", e);
-            }
-        }
-
+        // Live system clock running in topbar (Asia/Tashkent Timezone)
         function updateClock() {
             const clockEl = document.getElementById('live-clock');
             if (clockEl) {
-                const currentMs = Date.now() + serverClockOffsetMs;
-                const now = new Date(currentMs);
+                const now = new Date();
                 const timeFormatter = new Intl.DateTimeFormat('en-US', {
                     timeZone: 'Asia/Tashkent',
                     hour: '2-digit',
@@ -341,7 +312,6 @@
                 clockEl.innerText = timeFormatter.format(now);
             }
         }
-        syncHeaderClockWithServer();
         setInterval(updateClock, 1000);
         updateClock();
 
