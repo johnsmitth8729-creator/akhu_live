@@ -24,7 +24,6 @@ urlpatterns += i18n_patterns(
     path('cameras/', include('cameras.urls', namespace='cameras')),
     path('screens/', include('screens.urls', namespace='screens')),
     path('sources/', include('sources.urls', namespace='sources')),
-    path('recordings/', include('recordings.urls', namespace='recordings')),
     path('logs/', include('logs.urls', namespace='logs')),
     path('settings/', include('settings.urls', namespace='settings')),
     path('', include('dashboard.urls', namespace='dashboard')),

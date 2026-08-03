@@ -87,12 +87,7 @@
                         <i class="fa-solid fa-tower-broadcast"></i>
                         <span>{% translate "Live Sources" %}</span>
                     </a>
-                    
-                    <a class="nav-link-vms {% if request.resolver_match.app_name == 'recordings' %}active{% endif %}" href="{% url 'recordings:list' %}">
-                        <i class="fa-solid fa-film"></i>
-                        <span>{% translate "Recordings" %}</span>
-                    </a>
-                    
+
                     {% if user.is_super_admin %}
                         <div class="sidebar-heading mt-3">{% translate "System" %}</div>
                         <a class="nav-link-vms {% if request.resolver_match.app_name == 'logs' %}active{% endif %}" href="{% url 'logs:list' %}">

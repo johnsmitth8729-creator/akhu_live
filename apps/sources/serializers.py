@@ -1,5 +1,6 @@
 from rest_framework import serializers
-from sources.models import LiveSource, Recording
+from sources.models import LiveSource
+
 
 class LiveSourceSerializer(serializers.ModelSerializer):
     region_name = serializers.ReadOnlyField(source='region.name')
@@ -10,21 +11,8 @@ class LiveSourceSerializer(serializers.ModelSerializer):
         model = LiveSource
         fields = [
             'id', 'region', 'region_name', 'name', 'source_type', 'source_type_display',
-            'status', 'status_display', 'recording_enabled', 'streaming_url',
+            'status', 'status_display', 'streaming_url',
             'rtsp_url', 'rtsp_username', 'rtsp_password', 'building', 'floor', 'room',
-            'created_at', 'updated_at', 'last_connected', 'last_disconnected'
+            'created_at', 'updated_at', 'last_connected', 'last_disconnected',
         ]
         read_only_fields = ['status', 'created_at', 'updated_at', 'last_connected', 'last_disconnected']
-
-
-class RecordingSerializer(serializers.ModelSerializer):
-    source_name = serializers.ReadOnlyField(source='live_source.name')
-    region_name = serializers.ReadOnlyField(source='live_source.region.name')
-
-    class Meta:
-        model = Recording
-        fields = [
-            'id', 'live_source', 'source_name', 'region_name', 'file',
-            'filename', 'duration', 'filesize', 'created_at'
-        ]
-        read_only_fields = ['id', 'created_at']

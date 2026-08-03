@@ -13,9 +13,17 @@ restart_if_exists() {
     fi
 }
 
+# Update MediaMTX config (recording disabled, low-latency HLS enabled)
 if [ -d "/opt/mediamtx" ] && [ -f "/home/boss/akhu_live/mediamtx.yml" ]; then
     echo "Updating MediaMTX configuration..."
     cp /home/boss/akhu_live/mediamtx.yml /opt/mediamtx/mediamtx.yml
+fi
+
+# Remove leftover recordings directory from disk if it exists
+RECORDINGS_DIR="/home/boss/akhu_live/recordings"
+if [ -d "$RECORDINGS_DIR" ]; then
+    echo "Removing legacy recordings directory..."
+    rm -rf "$RECORDINGS_DIR"
 fi
 
 restart_if_exists "akhu_live"

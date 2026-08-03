@@ -3,13 +3,14 @@ from django.utils.translation import gettext_lazy as _
 from sources.models import LiveSource
 from regions.models import Region
 
+
 class LiveSourceForm(forms.ModelForm):
     class Meta:
         model = LiveSource
         fields = [
-            'region', 'name', 'source_type', 'recording_enabled',
+            'region', 'name', 'source_type',
             'rtsp_url', 'rtsp_username', 'rtsp_password',
-            'building', 'floor', 'room'
+            'building', 'floor', 'room',
         ]
 
     def __init__(self, *args, **kwargs):
@@ -18,14 +19,12 @@ class LiveSourceForm(forms.ModelForm):
 
         # Apply Bootstrap classes
         for name, field in self.fields.items():
-            if name == 'recording_enabled':
-                field.widget.attrs.update({'class': 'form-check-input'})
-            elif name == 'region' or name == 'source_type':
+            if name in ('region', 'source_type'):
                 field.widget.attrs.update({'class': 'form-select'})
             else:
                 field.widget.attrs.update({'class': 'form-control'})
 
-        # Restrict/Hide region for Region Admin
+        # Restrict/hide region for Region Admin
         if user and user.is_region_admin():
             self.fields['region'].required = False
             self.fields['region'].widget = forms.HiddenInput()

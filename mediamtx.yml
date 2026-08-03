@@ -118,7 +118,8 @@ pprofTrustedProxies: []
 ###############################################
 # Global settings -> Playback server
 
-playback: true
+# Disabled: DVR/recording playback is removed
+playback: false
 playbackAddress: :9996
 playbackEncryption: false
 playbackServerKey: server.key
@@ -169,7 +170,7 @@ rtmpTrustedProxies: []
 ###############################################
 # Global settings -> HLS server
 
-# Enable the HLS server, which allows to read streams with the HLS protocol.
+# HLS is the primary delivery protocol for live streams in this platform.
 hls: true
 # Address of the TCP/HTTP listener.
 hlsAddress: :8888
@@ -179,13 +180,30 @@ hlsServerKey: server.key
 hlsServerCert: server.crt
 hlsAllowOrigins: ["*"]
 hlsTrustedProxies: []
-hlsAlwaysRemux: false
+
+# Always remux streams to HLS regardless of whether clients are connected.
+# This eliminates the cold-start delay when the first viewer opens the page.
+hlsAlwaysRemux: true
+
+# Low-Latency HLS (LL-HLS): delivers sub-2-second latency to viewers.
 hlsVariant: lowLatency
-hlsSegmentCount: 7
+
+# Keep only 3 segments in the playlist — minimal buffer, fast start.
+hlsSegmentCount: 3
+
+# Each HLS segment = 1 second. Viewer waits at most 1 segment before playback.
 hlsSegmentDuration: 1s
+
+# LL-HLS partial segment duration: 200ms chunks for near-realtime delivery.
 hlsPartDuration: 200ms
+
+# Maximum size per segment — prevents runaway file growth.
 hlsSegmentMaxSize: 50M
+
+# Write HLS segments to memory (empty = in-memory). Avoids disk I/O overhead.
 hlsDirectory: ""
+
+# Close idle HLS muxers after 60s of no readers.
 hlsMuxerCloseAfter: 60s
 hlsCDNSecret: ""
 
@@ -254,16 +272,10 @@ pathDefaults:
   alwaysAvailableTracks: []
   alwaysAvailableFile: ""
 
-  # DVR rolling buffer recording
-  record: true
-  recordPath: ./recordings/%path/%Y-%m-%d_%H-%M-%S-%f
-  recordFormat: fmp4
-  recordPartDuration: 1s
-  recordMaxPartSize: 50M
-  # 5-second segments for responsive rolling buffer
-  recordSegmentDuration: 5s
-  # 10-minute rolling buffer automatically keeping only the latest 10 minutes
-  recordDeleteAfter: 10m
+  # ----- Recording: DISABLED -----
+  # Recording is fully disabled. All streams are live-only.
+  # Disabling recording removes disk I/O overhead and improves stream throughput.
+  record: false
 
   overridePublisher: true
   srtPublishPassphrase:
@@ -348,9 +360,5 @@ pathDefaults:
 
 paths:
   all_others:
-    record: true
-    recordPath: ./recordings/%path/%Y-%m-%d_%H-%M-%S-%f
-    recordFormat: fmp4
-    recordPartDuration: 1s
-    recordSegmentDuration: 5s
-    recordDeleteAfter: 10m
+    # Recording explicitly disabled on all paths.
+    record: false

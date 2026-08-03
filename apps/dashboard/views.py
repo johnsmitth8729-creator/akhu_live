@@ -1,5 +1,3 @@
-from zoneinfo import ZoneInfo
-from django.utils import timezone
 import logging
 import requests
 from django.shortcuts import render, redirect
@@ -9,14 +7,15 @@ from django.contrib.auth.mixins import LoginRequiredMixin
 from django.utils.translation import gettext_lazy as _
 from django.conf import settings
 from django.urls import reverse
-from django.http import JsonResponse, StreamingHttpResponse, HttpResponse
+from django.http import JsonResponse
+from django.utils import timezone
 from core.permissions import SuperAdminRequiredMixin, RegionAdminRequiredMixin
 from regions.models import Region
 from cameras.models import Camera, CameraStatus
 from logs.models import ActivityLog
 from streaming.models import StreamingLog
 from streaming.services import MediaMTXService
-from sources.models import LiveSource, Recording, StreamingSetting
+from sources.models import LiveSource, StreamingSetting
 
 logger = logging.getLogger(__name__)
 
@@ -277,117 +276,4 @@ class RegionDashboardView(RegionAdminRequiredMixin, TemplateView):
         
         return context
 
-
-from django.views import View
-from django.http import JsonResponse
-import requests
-
-class DVRListView(View):
-    """
-    Proxy to MediaMTX Playback List API.
-    Returns JSON list of recorded segments for the given stream_id.
-    """
-    def get(self, request, stream_id):
-        db_settings = StreamingSetting.objects.first()
-        playback_base = db_settings.mediamtx_playback_url if db_settings else "http://127.0.0.1:9996"
-        url = f"{playback_base}/list"
-        params = {"path": stream_id}
-        
-        if "start" in request.GET:
-            params["start"] = request.GET["start"]
-        if "end" in request.GET:
-            params["end"] = request.GET["end"]
-            
-        try:
-            resp = requests.get(url, params=params, timeout=5)
-            if resp.status_code == 200:
-                return JsonResponse(resp.json(), safe=False)
-            return JsonResponse([], safe=False)
-        except Exception as e:
-            return JsonResponse({"error": str(e)}, status=500)
-
-
-class DVRServerTimeView(View):
-    """
-    Returns current authoritative server time in Asia/Tashkent (UTC+5) for frontend clock sync.
-    """
-    def get(self, request):
-        now_tashkent = timezone.now().astimezone(ZoneInfo('Asia/Tashkent'))
-        return JsonResponse({
-            'status': 'success',
-            'server_time_iso': now_tashkent.isoformat(),
-            'server_time_ms': int(now_tashkent.timestamp() * 1000)
-        })
-
-
-from urllib.parse import quote
-
-class DVRGetView(View):
-    """
-    Django Streaming Proxy to MediaMTX Playback Get API.
-    Streams requested fmp4 video segment slice directly without 302 redirects.
-    """
-    def get(self, request, stream_id):
-        start = request.GET.get('start', '')
-        duration = request.GET.get('duration', '600')
-        fmt = request.GET.get('format', 'fmp4')
-
-        # Quote start parameter so +05:00 timezone offset becomes %2B05%3A00
-        quoted_start = quote(start, safe='')
-        playback_url = f"http://127.0.0.1:9996/get?path={stream_id}&start={quoted_start}&duration={duration}&format={fmt}"
-        
-        logger.info(f"[DVR Proxy] Incoming request for stream {stream_id} (start: {start}, duration: {duration})")
-        logger.info(f"[DVR Proxy] Upstream URL: {playback_url}")
-        print(f"[DVR Proxy] Incoming request for stream {stream_id} (start: {start}, duration: {duration})")
-        print(f"[DVR Proxy] Upstream URL: {playback_url}")
-
-        try:
-            upstream = requests.get(playback_url, stream=True, timeout=(5, 120))
-            logger.info(f"[DVR Proxy] Upstream status: {upstream.status_code}")
-            logger.info(f"[DVR Proxy] Content-Type: {upstream.headers.get('Content-Type')}")
-            print(f"[DVR Proxy] Upstream status: {upstream.status_code}, Content-Type: {upstream.headers.get('Content-Type')}")
-
-            if upstream.status_code != 200:
-                first_500 = upstream.content[:500]
-                logger.error(f"[DVR Proxy] Upstream non-200 response: {first_500}")
-                print(f"[DVR Proxy] Upstream non-200 response (first 500 bytes): {first_500}")
-                return HttpResponse(
-                    upstream.content,
-                    status=upstream.status_code,
-                    content_type=upstream.headers.get('Content-Type', 'application/json')
-                )
-
-            logger.info("[DVR Proxy] Streaming started")
-            print("[DVR Proxy] Streaming started")
-
-            def stream_generator():
-                try:
-                    for chunk in upstream.iter_content(chunk_size=65536):
-                        if chunk:
-                            yield chunk
-                    logger.info("[DVR Proxy] Streaming finished")
-                    print("[DVR Proxy] Streaming finished")
-                except Exception as stream_err:
-                    logger.error(f"[DVR Proxy] Streaming error: {stream_err}")
-                    print(f"[DVR Proxy] Streaming error: {stream_err}")
-
-            response = StreamingHttpResponse(
-                stream_generator(),
-                status=200,
-                content_type=upstream.headers.get('Content-Type', 'video/mp4')
-            )
-
-            # Forward headers if present
-            for header in ['Content-Length', 'Accept-Ranges', 'ETag', 'Last-Modified']:
-                if header in upstream.headers:
-                    response[header] = upstream.headers[header]
-
-            response['Cache-Control'] = 'no-cache'
-            response['Access-Control-Allow-Origin'] = '*'
-            return response
-
-        except Exception as e:
-            logger.error(f"[DVR Proxy] Upstream fetch failed: {e}")
-            print(f"[DVR Proxy] Upstream fetch failed: {e}")
-            return HttpResponse(str(e), status=502, content_type='text/plain')
 

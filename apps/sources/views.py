@@ -5,7 +5,7 @@ from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.utils.translation import gettext_lazy as _
 from django.conf import settings
-from sources.models import LiveSource, Recording, StreamingSetting
+from sources.models import LiveSource, StreamingSetting
 from sources.forms import LiveSourceForm
 
 class SourceQuerysetMixin(LoginRequiredMixin):

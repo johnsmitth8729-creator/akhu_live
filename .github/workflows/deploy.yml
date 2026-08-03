@@ -24,27 +24,30 @@ jobs:
 
           cd /home/boss/akhu_live
 
-          echo "Updating repository..."
+          echo "=== Updating repository ==="
           git fetch origin
           git reset --hard origin/main
 
-          echo "Activating virtual environment..."
+          echo "=== Activating virtual environment ==="
           source venv/bin/activate
 
-          echo "Installing dependencies..."
-          pip install -r requirements.txt
+          echo "=== Installing dependencies ==="
+          pip install -r requirements.txt --quiet
 
-          echo "Running migrations..."
+          echo "=== Running database migrations ==="
           python manage.py migrate --noinput
 
-          echo "Collecting static files..."
-          python manage.py collectstatic --noinput
+          echo "=== Collecting static files ==="
+          python manage.py collectstatic --noinput --clear
 
-          echo "Checking project..."
+          echo "=== Running Django system check ==="
           python manage.py check
 
-          echo "Restarting services..."
+          echo "=== Restarting services ==="
           chmod +x restart_services.sh
           sudo ./restart_services.sh
 
-          echo "Deployment completed successfully."
+          echo ""
+          echo "========================================"
+          echo "  Deployment completed successfully!"
+          echo "========================================"
