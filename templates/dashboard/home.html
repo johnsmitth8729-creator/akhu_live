@@ -613,12 +613,22 @@
                 if (gridVideo.srcObject && gridVideo.srcObject.active) {
                     console.log(`[LiveEngine ${this.streamId}] Instantly attaching MediaStream from grid card.`);
                     this.videoEl.srcObject = gridVideo.srcObject;
-                    this.videoEl.play().catch(() => {});
+                    this.videoEl.muted = false;
+                    this.videoEl.play().catch(() => {
+                        this.videoEl.muted = true;
+                        this.videoEl.play().catch(() => {});
+                    });
+                    this._syncVolumeIcon();
                     return;
                 } else if (gridVideo.src && gridVideo.src.length > 0) {
                     console.log(`[LiveEngine ${this.streamId}] Instantly attaching video src from grid card.`);
                     this.videoEl.src = gridVideo.src;
-                    this.videoEl.play().catch(() => {});
+                    this.videoEl.muted = false;
+                    this.videoEl.play().catch(() => {
+                        this.videoEl.muted = true;
+                        this.videoEl.play().catch(() => {});
+                    });
+                    this._syncVolumeIcon();
                     return;
                 }
             }
@@ -662,7 +672,14 @@
 
             this.peerConnection.ontrack = (event) => {
                 this.videoEl.srcObject = event.streams[0];
-                this.videoEl.play().catch(() => {});
+                // Unmute after stream arrives — user has interacted (clicked to open modal)
+                this.videoEl.muted = false;
+                this.videoEl.play().catch(() => {
+                    // Autoplay policy blocked unmuted play — stay muted but play
+                    this.videoEl.muted = true;
+                    this.videoEl.play().catch(() => {});
+                });
+                this._syncVolumeIcon();
                 if (this.connectionTimeout) {
                     clearTimeout(this.connectionTimeout);
                     this.connectionTimeout = null;
@@ -715,13 +732,37 @@
                 this.hlsPlayer.loadSource(this.hlsUrl);
                 this.hlsPlayer.attachMedia(this.videoEl);
                 this.hlsPlayer.on(Hls.Events.MANIFEST_PARSED, () => {
-                    this.videoEl.play().catch(() => {});
+                    this.videoEl.muted = false;
+                    this.videoEl.play().catch(() => {
+                        this.videoEl.muted = true;
+                        this.videoEl.play().catch(() => {});
+                    });
+                    this._syncVolumeIcon();
                 });
             } else if (this.videoEl.canPlayType('application/vnd.apple.mpegurl')) {
+                // Native HLS (Safari / iOS)
                 this.videoEl.src = this.hlsUrl;
                 this.videoEl.addEventListener('loadedmetadata', () => {
-                    this.videoEl.play().catch(() => {});
-                });
+                    this.videoEl.muted = false;
+                    this.videoEl.play().catch(() => {
+                        this.videoEl.muted = true;
+                        this.videoEl.play().catch(() => {});
+                    });
+                    this._syncVolumeIcon();
+                }, { once: true });
+            }
+        }
+
+        _syncVolumeIcon() {
+            const icon = document.getElementById('ytVolumeIcon');
+            const slider = document.getElementById('ytVolumeSlider');
+            if (!icon) return;
+            if (this.videoEl.muted || this.videoEl.volume === 0) {
+                icon.className = 'fa-solid fa-volume-xmark text-danger';
+                if (slider) slider.value = 0;
+            } else {
+                icon.className = 'fa-solid fa-volume-high';
+                if (slider) slider.value = this.videoEl.volume;
             }
         }
 
@@ -963,9 +1004,8 @@
                     || document.mozFullscreenElement 
                     || document.msFullscreenElement;
                 
-                const isVideoFS = fsElement && (fsElement.id === 'playerLiveVideo' || fsElement.id === 'playerDvrVideo');
-                
-                if (isVideoFS) {
+                if (fsElement) {
+                    // Any fullscreen element in the player → lock to landscape
                     FullscreenManager.lockOrientation();
                 } else {
                     FullscreenManager.unlockOrientation();
@@ -1313,12 +1353,14 @@
         toggleFullscreen() {
             const viewport = document.getElementById('vmsVideoViewport') || this.modalEl;
             if (!viewport) return;
-            if (!document.fullscreenElement) {
-                if (viewport.requestFullscreen) viewport.requestFullscreen();
-                else if (viewport.webkitRequestFullscreen) viewport.webkitRequestFullscreen();
+            const isFS = document.fullscreenElement
+                || document.webkitFullscreenElement
+                || document.mozFullscreenElement
+                || document.msFullscreenElement;
+            if (!isFS) {
+                FullscreenManager.request(viewport, this.liveVideo);
             } else {
-                if (document.exitFullscreen) document.exitFullscreen();
-                else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
+                FullscreenManager.exit(viewport);
             }
         }
 

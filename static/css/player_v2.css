@@ -111,3 +111,37 @@
         padding: 8px 10px;
     }
 }
+
+/* ── Fullscreen landscape enforcement for all browsers ─────────────────── */
+/* When the viewport div or video is fullscreen, force landscape layout    */
+:fullscreen video,
+:-webkit-full-screen video,
+:-moz-full-screen video {
+    width: 100vw !important;
+    height: 100vh !important;
+    object-fit: contain !important;
+}
+
+:fullscreen .vms-video-viewport,
+:-webkit-full-screen .vms-video-viewport,
+:-moz-full-screen .vms-video-viewport {
+    width: 100vw !important;
+    height: 100vh !important;
+    aspect-ratio: unset !important;
+    border-radius: 0 !important;
+}
+
+/* Mobile portrait → rotate hint via CSS (fallback for when
+   screen.orientation.lock() is blocked by browser policy)   */
+@media (max-width: 768px) and (orientation: portrait) {
+    :fullscreen .vms-video-viewport,
+    :-webkit-full-screen .vms-video-viewport {
+        transform: rotate(90deg);
+        transform-origin: center center;
+        width: 100vh !important;
+        height: 100vw !important;
+        position: fixed;
+        top: calc((100vh - 100vw) / 2);
+        left: calc((100vw - 100vh) / 2);
+    }
+}
