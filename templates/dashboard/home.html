@@ -609,28 +609,25 @@
         async start() {
             this.stop();
             const gridVideo = document.getElementById(`video-${this.streamId}`);
-            if (gridVideo) {
-                if (gridVideo.srcObject && gridVideo.srcObject.active) {
-                    console.log(`[LiveEngine ${this.streamId}] Instantly attaching MediaStream from grid card.`);
-                    this.videoEl.srcObject = gridVideo.srcObject;
-                    this.videoEl.muted = false;
-                    this.videoEl.play().catch(() => {
-                        this.videoEl.muted = true;
-                        this.videoEl.play().catch(() => {});
-                    });
-                    this._syncVolumeIcon();
-                    return;
-                } else if (gridVideo.src && gridVideo.src.length > 0) {
-                    console.log(`[LiveEngine ${this.streamId}] Instantly attaching video src from grid card.`);
-                    this.videoEl.src = gridVideo.src;
-                    this.videoEl.muted = false;
-                    this.videoEl.play().catch(() => {
-                        this.videoEl.muted = true;
-                        this.videoEl.play().catch(() => {});
-                    });
-                    this._syncVolumeIcon();
-                    return;
-                }
+            if (gridVideo && gridVideo.srcObject && gridVideo.srcObject.active) {
+                console.log(`[LiveEngine ${this.streamId}] Instantly attaching MediaStream from grid card with track enabling.`);
+                const audioTracks = gridVideo.srcObject.getAudioTracks();
+                const videoTracks = gridVideo.srcObject.getVideoTracks();
+                console.log(`[LiveEngine ${this.streamId}] Grid stream audio tracks:`, audioTracks.length, "video tracks:", videoTracks.length);
+                
+                audioTracks.forEach(t => { t.enabled = true; });
+                
+                const modalStream = new MediaStream([...videoTracks, ...audioTracks]);
+                this.videoEl.srcObject = modalStream;
+                this.videoEl.muted = false;
+                this.videoEl.volume = 1.0;
+                this.videoEl.play().catch(err => {
+                    console.warn(`[LiveEngine ${this.streamId}] Unmuted play failed, falling back to muted play:`, err);
+                    this.videoEl.muted = true;
+                    this.videoEl.play().catch(() => {});
+                });
+                this._syncVolumeIcon();
+                return;
             }
 
             try {
@@ -671,11 +668,19 @@
             }, 2500);
 
             this.peerConnection.ontrack = (event) => {
-                this.videoEl.srcObject = event.streams[0];
-                // Unmute after stream arrives — user has interacted (clicked to open modal)
+                console.log(`[LiveEngine ${this.streamId}] WHEP ontrack:`, event.track.kind, event.streams);
+                const stream = (event.streams && event.streams[0]) ? event.streams[0] : new MediaStream([event.track]);
+                
+                stream.getAudioTracks().forEach(t => { t.enabled = true; });
+                
+                if (this.videoEl.srcObject !== stream) {
+                    this.videoEl.srcObject = stream;
+                }
+                
                 this.videoEl.muted = false;
-                this.videoEl.play().catch(() => {
-                    // Autoplay policy blocked unmuted play — stay muted but play
+                this.videoEl.volume = 1.0;
+                this.videoEl.play().catch(e => {
+                    console.warn(`[LiveEngine ${this.streamId}] Unmuted WHEP play blocked:`, e);
                     this.videoEl.muted = true;
                     this.videoEl.play().catch(() => {});
                 });
