@@ -665,7 +665,7 @@
                     console.warn("Live WebRTC negotiation timeout. Triggering fallback.");
                     this.triggerHlsFallback();
                 }
-            }, 2500);
+            }, 12000);
 
             this.peerConnection.ontrack = (event) => {
                 console.log(`[LiveEngine ${this.streamId}] WHEP ontrack:`, event.track.kind, event.streams);
