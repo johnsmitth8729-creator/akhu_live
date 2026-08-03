@@ -799,7 +799,10 @@
                 }
                 
                 console.log(`[Source ${sourceId}] Adding tracks to publisher PeerConnection...`);
-                stream.getTracks().forEach(track => pc.addTrack(track, stream));
+                stream.getTracks().forEach(track => {
+                    track.enabled = true;
+                    pc.addTrack(track, stream);
+                });
 
                 // Prefer H.264 for the video transceiver to ensure cross-device and Safari/iOS compatibility
                 try {

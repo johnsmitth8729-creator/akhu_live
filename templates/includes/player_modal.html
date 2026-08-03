@@ -26,7 +26,12 @@
 
                     <!-- Engine 1: LIVE (WebRTC WHEP / HLS) -->
                     <div class="vms-engine engine-active" id="liveEngine">
-                        <video id="playerLiveVideo" autoplay muted playsinline class="w-100 h-100 bg-black"></video>
+                        <video id="playerLiveVideo" autoplay playsinline class="w-100 h-100 bg-black"></video>
+                        <!-- Floating Unmute Audio Overlay Button for Mobile Browsers -->
+                        <button type="button" id="unmuteOverlayBtn" class="btn btn-danger btn-sm position-absolute top-50 start-50 translate-middle z-3 shadow-lg px-3 py-2 rounded-pill d-none" onclick="unmutePlayerAudio()">
+                            <i class="fa-solid fa-volume-xmark me-2"></i>
+                            <span class="fw-bold">{% translate "Ovozni yoqish (Unmute)" %}</span>
+                        </button>
                     </div>
 
                     <!-- Engine 2: DVR (MSE fmp4 playback for recorded sessions) -->

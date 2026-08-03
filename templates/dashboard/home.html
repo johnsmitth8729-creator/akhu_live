@@ -756,13 +756,15 @@
         _syncVolumeIcon() {
             const icon = document.getElementById('ytVolumeIcon');
             const slider = document.getElementById('ytVolumeSlider');
-            if (!icon) return;
+            const overlayBtn = document.getElementById('unmuteOverlayBtn');
             if (this.videoEl.muted || this.videoEl.volume === 0) {
-                icon.className = 'fa-solid fa-volume-xmark text-danger';
+                if (icon) icon.className = 'fa-solid fa-volume-xmark text-danger';
                 if (slider) slider.value = 0;
+                if (overlayBtn) overlayBtn.classList.remove('d-none');
             } else {
-                icon.className = 'fa-solid fa-volume-high';
+                if (icon) icon.className = 'fa-solid fa-volume-high';
                 if (slider) slider.value = this.videoEl.volume;
+                if (overlayBtn) overlayBtn.classList.add('d-none');
             }
         }
 
@@ -1385,10 +1387,31 @@
     let globalVideoPlayer = null;
 
     window.openPlayerModal = function(streamId, name, whepUrl, hlsUrl) {
+        // Synchronously unlock audio context on playerLiveVideo inside user click gesture tick
+        const liveVid = document.getElementById('playerLiveVideo');
+        if (liveVid) {
+            liveVid.muted = false;
+            liveVid.volume = 1.0;
+        }
         if (!globalVideoPlayer) {
             globalVideoPlayer = new VideoPlayer();
         }
         globalVideoPlayer.open(streamId, name, whepUrl, hlsUrl);
+    };
+
+    window.unmutePlayerAudio = function() {
+        const liveVid = document.getElementById('playerLiveVideo');
+        if (liveVid) {
+            liveVid.muted = false;
+            liveVid.volume = 1.0;
+            liveVid.play().catch(e => console.warn("Unmute play failed:", e));
+        }
+        const overlayBtn = document.getElementById('unmuteOverlayBtn');
+        if (overlayBtn) overlayBtn.classList.add('d-none');
+        const icon = document.getElementById('ytVolumeIcon');
+        if (icon) icon.className = 'fa-solid fa-volume-high';
+        const slider = document.getElementById('ytVolumeSlider');
+        if (slider) slider.value = 1.0;
     };
 
     function closePlayerModal() {
