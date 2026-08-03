@@ -863,7 +863,6 @@
                 } catch(codecErr) {
                     console.warn(`[Source ${sourceId}] Could not set H.264 codec preferences:`, codecErr);
                 }
-
                 pc.onconnectionstatechange = () => {
                     const state = pc.connectionState;
                     console.log(`[Source ${sourceId}] Publisher PeerConnection state:`, state);
@@ -1077,7 +1076,27 @@
             badge.className = 'badge bg-secondary px-2 py-0.5 text-uppercase';
             const indicator = document.getElementById(`indicator-${sourceId}`);
             indicator.className = 'indicator-pulse bg-secondary';
-            console.log(`[Source ${sourceId}] Streaming stopped successfully.`);
+        }
+    }
+
+    function optimizeVideoSender(pc) {
+        if (!pc) return;
+        try {
+            const sender = pc.getSenders().find(s => s.track && s.track.kind === 'video');
+            if (sender && sender.getParameters && sender.setParameters) {
+                const params = sender.getParameters();
+                if (!params.encodings || params.encodings.length === 0) {
+                    params.encodings = [{}];
+                }
+                params.encodings[0].maxBitrate = 3000000; // 3.0 Mbps crystal clear HD
+                params.encodings[0].maxFramerate = 30;    // 30 FPS smooth video
+                params.degradationPreference = 'maintain-framerate';
+                sender.setParameters(params).then(() => {
+                    console.log("[Publisher] Video sender parameters optimized: 3Mbps, 30FPS, maintain-framerate.");
+                }).catch(e => console.warn("[Publisher] Could not set sender parameters:", e));
+            }
+        } catch (err) {
+            console.warn("[Publisher] optimizeVideoSender error:", err);
         }
     }
 

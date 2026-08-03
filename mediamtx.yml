@@ -24,11 +24,11 @@ readTimeout: 10s
 # Timeout of write operations.
 writeTimeout: 10s
 # Size of the queue of outgoing packets.
-writeQueueSize: 512
+writeQueueSize: 2048
 # Maximum size of outgoing UDP payloads.
 udpMaxPayloadSize: 1452
-# Size of the read buffer of every UDP socket.
-udpReadBufferSize: 0
+# Size of the read buffer of every UDP socket (16MB for high throughput).
+udpReadBufferSize: 16777216
 
 runOnConnect:
 runOnConnectRestart: false
@@ -188,8 +188,8 @@ hlsAlwaysRemux: true
 # Low-Latency HLS (LL-HLS): delivers sub-2-second latency to viewers.
 hlsVariant: lowLatency
 
-# Keep only 3 segments in the playlist — minimal buffer, fast start.
-hlsSegmentCount: 3
+# Keep 5 segments in the playlist — smooth buffer, prevents stuttering on mobile.
+hlsSegmentCount: 5
 
 # Each HLS segment = 1 second. Viewer waits at most 1 segment before playback.
 hlsSegmentDuration: 1s
