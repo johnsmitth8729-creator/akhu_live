@@ -881,9 +881,8 @@
             }
 
             if (!Array.isArray(segments) || segments.length === 0) {
-                console.warn(`[ReqID: ${requestId}] [DVREngine LOG] No recorded segments returned by /list for stream ${this.streamId}.`);
+                console.warn(`[ReqID: ${requestId}] [DVREngine LOG] No recorded segments returned by /list for stream ${this.streamId}. Smoothly returning to Live.`);
                 this.stateMachine.setState(DVRState.ERROR, { error: 'No recording segments' });
-                alert("{% translate 'DVR recording is initializing. Please wait a few seconds and try again.' %}");
                 switchToLive();
                 return;
             }
