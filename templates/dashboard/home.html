@@ -142,7 +142,7 @@
             <div class="row row-cols-1 row-cols-md-2 row-cols-lg-3 row-cols-xl-4 g-4 vms-grid-container">
                 {% for c in streams %}
                     <div class="col camera-card-col" id="col-camera-{{ c.unique_id }}">
-                        <div class="card video-card-vms shadow-sm h-100 border-0 cursor-pointer btn-watch-camera" id="card-camera-{{ c.unique_id }}" data-stream-id="{{ c.unique_id }}" data-stream-name="{{ c.name }}" data-whep-url="{{ c.stream_urls.whep }}" data-hls-url="{{ c.stream_urls.hls }}" style="cursor: pointer;">
+                        <div class="card video-card-vms shadow-sm h-100 border-0 cursor-pointer btn-watch-camera" id="card-camera-{{ c.unique_id }}" data-stream-id="{{ c.unique_id }}" data-stream-name="{{ c.name }}" data-whep-url="{{ c.stream_urls.whep }}" data-hls-url="{{ c.stream_urls.hls }}" onclick="window.openPlayerModal('{{ c.unique_id }}', '{{ c.name|escapejs }}', resolveDynamicUrl('{{ c.stream_urls.whep }}'), resolveDynamicUrl('{{ c.stream_urls.hls }}'))" style="cursor: pointer;">
                             <!-- Live Streaming Viewport -->
                             <div class="video-container position-relative">
                                 <video id="video-{{ c.unique_id }}" autoplay muted playsinline class="w-100 h-100 bg-black" style="object-fit: contain;"></video>
