@@ -84,7 +84,7 @@ class CameraCreateView(CameraQuerysetMixin, CreateView):
         # Automatically register camera with MediaMTX
         MediaMTXService.add_camera_path(camera)
         
-        messages.success(self.request, _(f"Camera '{camera.name}' added successfully."))
+        messages.success(self.request, _("Camera '%(name)s' added successfully.") % {'name': camera.name})
         return redirect(self.success_url)
 
 
@@ -105,7 +105,7 @@ class CameraUpdateView(CameraQuerysetMixin, UpdateView):
         # Update connection configuration in MediaMTX
         MediaMTXService.add_camera_path(camera)
         
-        messages.success(self.request, _(f"Camera '{camera.name}' updated successfully."))
+        messages.success(self.request, _("Camera '%(name)s' updated successfully.") % {'name': camera.name})
         return redirect(self.success_url)
 
 

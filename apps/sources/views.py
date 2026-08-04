@@ -100,7 +100,7 @@ class LiveSourceCreateWizardView(SourceQuerysetMixin, CreateView):
         source.streaming_url = f"{webrtc_base}/{stream_name}/"
         source.save()
 
-        messages.success(self.request, _(f"Source '{source.name}' successfully registered."))
+        messages.success(self.request, _("Source '%(name)s' successfully registered.") % {'name': source.name})
         return redirect(self.success_url)
 
 
@@ -117,7 +117,7 @@ class LiveSourceUpdateView(SourceQuerysetMixin, UpdateView):
 
     def form_valid(self, form):
         source = form.save()
-        messages.success(self.request, _(f"Source '{source.name}' updated successfully."))
+        messages.success(self.request, _("Source '%(name)s' updated successfully.") % {'name': source.name})
         return redirect(self.success_url)
 
 

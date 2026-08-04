@@ -61,7 +61,7 @@ class RegionCreateView(SuperAdminRequiredMixin, CreateView):
                 region.user = user
                 region.save()
                 
-            messages.success(self.request, _(f"Region '{region.name}' and user '{username}' created successfully."))
+            messages.success(self.request, _("Region '%(region)s' and user '%(user)s' created successfully.") % {'region': region.name, 'user': username})
             return redirect(self.success_url)
         except Exception as e:
             form.add_error(None, f"Error creating region: {e}")
@@ -83,7 +83,7 @@ class RegionUpdateView(SuperAdminRequiredMixin, UpdateView):
                 user.is_active = region.is_active
                 user.save(update_fields=['is_active'])
                 
-            messages.success(self.request, _(f"Region '{region.name}' updated successfully."))
+            messages.success(self.request, _("Region '%(name)s' updated successfully.") % {'name': region.name})
             return redirect(self.success_url)
         except Exception as e:
             form.add_error(None, f"Error updating region: {e}")
