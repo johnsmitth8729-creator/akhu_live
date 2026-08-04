@@ -175,6 +175,7 @@ class HomeView(TemplateView):
             'total_cameras': total_streams_count,
             'online_cameras': online_count,
             'offline_cameras': offline_count,
+            'regions': Region.objects.filter(is_active=True).count(),
             'bandwidth': bandwidth_val,
         }
 
