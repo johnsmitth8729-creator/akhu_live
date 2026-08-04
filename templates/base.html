@@ -133,15 +133,6 @@
                                 <span>{% translate "System Healthy" %}</span>
                             </span>
                         </div>
-                        
-                        <!-- Enterprise Operational Metrics Bar -->
-                        <div class="d-none d-xl-flex align-items-center gap-3 mt-1 text-muted small" style="font-size: 0.725rem;">
-                            <span><i class="fa-solid fa-video me-1 text-primary"></i><strong class="text-dark">{{ stats.total_cameras|default:"0" }}</strong> {% translate "Cameras" %}</span>
-                            <span class="border-start ps-3"><i class="fa-solid fa-circle-check me-1 text-success"></i><strong class="text-success">{{ stats.online_cameras|default:"0" }}</strong> {% translate "Online" %}</span>
-                            <span class="border-start ps-3"><i class="fa-solid fa-circle-xmark me-1 text-danger"></i><strong class="text-danger">{{ stats.offline_cameras|default:"0" }}</strong> {% translate "Offline" %}</span>
-                            <span class="border-start ps-3"><i class="fa-solid fa-earth-asia me-1 text-info"></i><strong class="text-dark">{{ stats.regions|default:GLOBAL_REGIONS|length }}</strong> {% translate "Regions" %}</span>
-                            <span class="border-start ps-3"><i class="fa-solid fa-bolt me-1 text-warning"></i><strong class="text-dark">{{ stats.bandwidth|default:"0.0" }}</strong> Mbps</span>
-                        </div>
                     </div>
                 </div>
                 
@@ -329,6 +320,7 @@
     
     <!-- Clock & Theme Toggle Scripts -->
     <script>
+        window.SERVER_TIME_OFFSET_MS = parseInt("{{ SERVER_TIME_OFFSET_MS }}") || 0;
         // Live system clock synced with Production Tashkent Server (24-Hour Format: 15:24:22)
         const clockEl = document.getElementById('live-clock');
         const initialServerMs = clockEl ? parseInt(clockEl.getAttribute('data-server-time')) || Date.now() : Date.now();

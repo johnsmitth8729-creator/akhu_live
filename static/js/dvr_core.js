@@ -27,20 +27,14 @@ class DVREventBus {
 
 // --- 1.1 Unified Timezone Utility ---
 function formatUzbekistanTime(date, mode = 'time') {
-    const rawTimestamp = date;
-    const d = (date instanceof Date) ? date : new Date(date);
-    if (isNaN(d.getTime())) return '--:--:--';
+    let inputMs = (date instanceof Date) ? date.getTime() : (typeof date === 'number' ? date : new Date(date).getTime());
+    if (isNaN(inputMs)) return '--:--:--';
 
-    console.log("[TIMEZONE DEBUG] Raw timestamp:", rawTimestamp);
-    console.log("[TIMEZONE DEBUG] Date ISO:", d.toISOString());
-    console.log("[TIMEZONE DEBUG] Local:", d.toString());
-    console.log("[TIMEZONE DEBUG] Asia/Tashkent:",
-        new Intl.DateTimeFormat('uz-UZ', {
-            timeZone: 'Asia/Tashkent',
-            dateStyle: 'full',
-            timeStyle: 'long'
-        }).format(d)
-    );
+    // If client PC clock is skewed, adjust timestamp using server offset for live mode
+    if (window.SERVER_TIME_OFFSET_MS && Math.abs(inputMs - Date.now()) < 10000) {
+        inputMs += window.SERVER_TIME_OFFSET_MS;
+    }
+    const d = new Date(inputMs);
 
     if (mode === 'full' || mode === 'tooltip') {
         const parts = new Intl.DateTimeFormat('en-GB', {
