@@ -74,21 +74,18 @@ class HomeView(TemplateView):
         request_scheme = 'https' if self.request.is_secure() else 'http'
         is_prod = not getattr(settings, 'DEBUG', False)
         
-        def get_dynamic_url(url_str):
+        def get_dynamic_url(url_str, default_prefix=''):
             if not url_str:
                 return url_str
-            # Check if accessed via domain or over secure HTTPS connection
             is_domain = not request_host.replace('.', '').isdigit() and request_host != 'localhost'
             use_proxy_path = self.request.is_secure() or is_prod or is_domain
             
             if use_proxy_path:
-                prefix = ''
-                if ':8889' in url_str:
+                prefix = default_prefix
+                if ':8889' in url_str or '/webrtc' in url_str:
                     prefix = '/webrtc'
-                elif ':8888' in url_str:
+                elif ':8888' in url_str or '/hls' in url_str:
                     prefix = '/hls'
-                else:
-                    return url_str
                 return f"{request_scheme}://{self.request.get_host()}{prefix}"
             else:
                 if '127.0.0.1' in url_str or 'localhost' in url_str:
@@ -97,13 +94,13 @@ class HomeView(TemplateView):
 
         db_settings = StreamingSetting.objects.first()
         if db_settings:
-            hls_base = get_dynamic_url(db_settings.mediamtx_hls_url)
-            webrtc_base = get_dynamic_url(db_settings.mediamtx_webrtc_url)
+            hls_base = get_dynamic_url(db_settings.mediamtx_hls_url, default_prefix='/hls')
+            webrtc_base = get_dynamic_url(db_settings.mediamtx_webrtc_url, default_prefix='/webrtc')
             stun_url = db_settings.stun_url
             turn_url = db_settings.turn_url
         else:
-            hls_base = get_dynamic_url(getattr(settings, 'MEDIAMTX_HLS_URL', 'http://127.0.0.1:8888'))
-            webrtc_base = get_dynamic_url(getattr(settings, 'MEDIAMTX_WEBRTC_URL', 'http://127.0.0.1:8889'))
+            hls_base = get_dynamic_url(getattr(settings, 'MEDIAMTX_HLS_URL', 'http://127.0.0.1:8888'), default_prefix='/hls')
+            webrtc_base = get_dynamic_url(getattr(settings, 'MEDIAMTX_WEBRTC_URL', 'http://127.0.0.1:8889'), default_prefix='/webrtc')
             stun_url = 'stun:stun.l.google.com:19302'
             turn_url = ''
 
