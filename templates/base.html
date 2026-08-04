@@ -326,10 +326,13 @@
         const initialServerMs = clockEl ? parseInt(clockEl.getAttribute('data-server-time')) || Date.now() : Date.now();
         const clientStartMs = Date.now();
 
+        window.getTashkentServerTimeMs = function() {
+            return initialServerMs + (Date.now() - clientStartMs);
+        };
+
         function updateClock() {
             if (clockEl) {
-                const elapsed = Date.now() - clientStartMs;
-                const currentMs = initialServerMs + elapsed;
+                const currentMs = window.getTashkentServerTimeMs();
                 const d = new Date(currentMs);
                 const timeFormatter = new Intl.DateTimeFormat('en-GB', {
                     timeZone: 'Asia/Tashkent',

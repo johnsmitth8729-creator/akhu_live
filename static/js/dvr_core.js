@@ -27,12 +27,15 @@ class DVREventBus {
 
 // --- 1.1 Unified Timezone Utility ---
 function formatUzbekistanTime(date, mode = 'time') {
-    let inputMs = (date instanceof Date) ? date.getTime() : (typeof date === 'number' ? date : new Date(date).getTime());
-    if (isNaN(inputMs)) return '--:--:--';
-
-    // Always apply server time offset to correct client PC clock skews (e.g. AM/PM or 12-hour offset)
-    if (window.SERVER_TIME_OFFSET_MS) {
-        inputMs += window.SERVER_TIME_OFFSET_MS;
+    let inputMs;
+    if (typeof window.getTashkentServerTimeMs === 'function' && (!date || Math.abs(date - Date.now()) < 5000)) {
+        inputMs = window.getTashkentServerTimeMs();
+    } else {
+        inputMs = (date instanceof Date) ? date.getTime() : (typeof date === 'number' ? date : new Date(date).getTime());
+        if (isNaN(inputMs)) return '--:--:--';
+        if (window.SERVER_TIME_OFFSET_MS) {
+            inputMs += window.SERVER_TIME_OFFSET_MS;
+        }
     }
     const d = new Date(inputMs);
 
