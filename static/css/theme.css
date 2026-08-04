@@ -3,7 +3,7 @@
 :root {
     --font-body: 'Inter', system-ui, -apple-system, sans-serif;
 
-    /* Enterprise CCTV Dark Theme Palette */
+    /* Enterprise CCTV Dark Theme Palette (Default) */
     --bg-color: #0F172A;
     --card-bg: #1E293B;
     --border-color: #334155;
@@ -62,13 +62,57 @@ body {
     transition-duration: 0.12s;
 }
 
-/* Typography & General Classes */
-.text-dark {
+/* Typography & Contrast Overrides for Dark Mode */
+html:not([data-theme="light"]) .text-dark,
+[data-theme="dark"] .text-dark {
+    color: #F8FAFC !important;
+}
+
+html:not([data-theme="light"]) .text-muted,
+[data-theme="dark"] .text-muted,
+html:not([data-theme="light"]) .text-white-50 {
+    color: #CBD5E1 !important;
+}
+
+html:not([data-theme="light"]) .card,
+[data-theme="dark"] .card,
+html:not([data-theme="light"]) .filter-card {
+    background-color: var(--card-bg) !important;
+    border-color: var(--border-color) !important;
     color: var(--text-color) !important;
 }
 
-.text-muted {
-    color: var(--text-muted) !important;
+html:not([data-theme="light"]) .bg-light,
+html:not([data-theme="light"]) .bg-light-subtle,
+html:not([data-theme="light"]) .bg-dark-subtle {
+    background-color: #1E293B !important;
+    color: #F8FAFC !important;
+    border-color: #334155 !important;
+}
+
+html:not([data-theme="light"]) .form-control,
+html:not([data-theme="light"]) .form-select,
+html:not([data-theme="light"]) .input-group-text {
+    background-color: #0F172A !important;
+    color: #F8FAFC !important;
+    border-color: #334155 !important;
+}
+
+html:not([data-theme="light"]) .form-control::placeholder {
+    color: #94A3B8 !important;
+}
+
+html:not([data-theme="light"]) table,
+html:not([data-theme="light"]) .table {
+    color: #F8FAFC !important;
+    border-color: #334155 !important;
+}
+
+html:not([data-theme="light"]) .table td,
+html:not([data-theme="light"]) .table th {
+    background-color: var(--card-bg) !important;
+    color: #F8FAFC !important;
+    border-color: #334155 !important;
 }
 
 .border, .border-top, .border-bottom, .border-start, .border-end {
@@ -79,5 +123,22 @@ select.form-select option {
     background-color: var(--card-bg) !important;
     color: var(--text-color) !important;
 }
+
+/* Mobile Responsiveness Improvements */
+@media (max-width: 991.98px) {
+    #topbar {
+        background-color: var(--topbar-bg) !important;
+        border-bottom: 1px solid var(--border-color) !important;
+    }
+    
+    #sidebar {
+        background-color: var(--sidebar-bg) !important;
+    }
+
+    .filter-card .card-body {
+        padding: 0.75rem !important;
+    }
+}
+
 
 

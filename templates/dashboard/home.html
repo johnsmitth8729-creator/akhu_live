@@ -94,60 +94,18 @@
     </div>
 </div>
 
-<!-- Search & Enterprise Filters Bar -->
+<!-- Search Bar -->
 <div class="card mb-4 border-0 shadow-sm filter-card">
     <div class="card-body p-3">
         <form method="get" class="d-flex align-items-center gap-2 flex-wrap w-100">
             <!-- Keyword search input -->
-            <div class="flex-grow-1" style="min-width: 200px;">
+            <div class="flex-grow-1" style="min-width: 250px;">
                 <div class="input-group input-group-sm">
                     <span class="input-group-text bg-transparent border-end-0 text-muted"><i class="fa-solid fa-magnifying-glass"></i></span>
                     <input type="text" name="search" class="form-control border-start-0 shadow-none" placeholder="{% translate 'Search camera, room, building...' %}" value="{{ search_query }}">
                 </div>
             </div>
 
-            <!-- Region Filter -->
-            <div style="min-width: 140px;">
-                <select name="region" class="form-select form-select-sm shadow-none" onchange="this.form.submit()">
-                    <option value="">{% translate "All Regions" %}</option>
-                    {% for r in regions %}
-                        <option value="{{ r.id }}" {% if selected_region == r.id|stringformat:'s' %}selected{% endif %}>{{ r.name }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-
-            <!-- Building Filter -->
-            <div style="min-width: 130px;">
-                <select name="building" class="form-select form-select-sm shadow-none" onchange="this.form.submit()">
-                    <option value="">{% translate "All Buildings" %}</option>
-                    {% for b in buildings %}
-                        <option value="{{ b }}" {% if selected_building == b %}selected{% endif %}>{{ b }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-
-            <!-- Status Filter -->
-            <div style="min-width: 120px;">
-                <select name="status" class="form-select form-select-sm shadow-none" onchange="this.form.submit()">
-                    <option value="">{% translate "All Statuses" %}</option>
-                    <option value="online" {% if selected_status == 'online' %}selected{% endif %}>{% translate "Online" %}</option>
-                    <option value="offline" {% if selected_status == 'offline' %}selected{% endif %}>{% translate "Offline" %}</option>
-                </select>
-            </div>
-
-            <!-- VMS Layout selector -->
-            <div style="width: 90px;">
-                <select id="vmsLayoutSelect" class="form-select form-select-sm shadow-none" onchange="changeVmsLayout(this.value)" title="{% translate 'Grid Layout' %}">
-                    <option value="standard">Auto</option>
-                    <option value="1x1">1x1</option>
-                    <option value="2x2">2x2</option>
-                    <option value="3x3">3x3</option>
-                    <option value="4x4">4x4</option>
-                    <option value="5x5">5x5</option>
-                    <option value="6x6">6x6</option>
-                </select>
-            </div>
-            
             <!-- Filter actions and status polling toggle -->
             <div class="d-flex align-items-center gap-2 ms-auto">
                 <div class="form-check form-switch d-flex align-items-center m-0 me-1">
