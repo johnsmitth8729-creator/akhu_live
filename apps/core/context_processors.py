@@ -25,10 +25,18 @@ def settings_and_theme(request):
     try:
         from django.core.cache import cache
         from regions.models import Region
-        global_regions = cache.get('global_regions_sidebar')
+        from django.db.models import Count
+        global_regions = cache.get('global_regions_sidebar_v3')
         if global_regions is None:
-            global_regions = list(Region.objects.filter(is_active=True).order_by('name'))
-            cache.set('global_regions_sidebar', global_regions, timeout=300)
+            regions_qs = Region.objects.filter(is_active=True).annotate(
+                cams_cnt=Count('cameras', distinct=True),
+                sources_cnt=Count('livesources', distinct=True)
+            ).order_by('name')
+            global_regions = []
+            for r in regions_qs:
+                r.total_stream_count = (r.cams_cnt or 0) + (r.sources_cnt or 0)
+                global_regions.append(r)
+            cache.set('global_regions_sidebar_v3', global_regions, timeout=300)
     except Exception as e:
         import logging
         logging.getLogger(__name__).warning(f"Error loading global_regions list: {e}")

@@ -874,6 +874,20 @@
                             clearTimeout(publisherReconnectTimers[sourceId]);
                             delete publisherReconnectTimers[sourceId];
                         }
+                        // Notify backend to update LiveSource status to ONLINE in DB
+                        fetch('/api/start-stream/', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': '{{ csrf_token }}' },
+                            body: JSON.stringify({ source_id: sourceId })
+                        }).then(r => r.json()).then(data => {
+                            const badge = document.getElementById(`badge-status-${sourceId}`);
+                            if (badge) {
+                                badge.innerText = 'ONLINE';
+                                badge.className = 'badge bg-success px-2 py-0.5 text-uppercase';
+                            }
+                            const indicator = document.getElementById(`indicator-${sourceId}`);
+                            if (indicator) indicator.className = 'indicator-pulse bg-success';
+                        }).catch(err => console.warn("Failed to notify backend start-stream:", err));
                     } else if (state === 'failed' || state === 'disconnected') {
                         console.warn(`[Source ${sourceId}] Publisher connection ${state}. Starting auto-reconnect timer.`);
                         if (isStreamingActive[sourceId] && !publisherReconnectTimers[sourceId]) {

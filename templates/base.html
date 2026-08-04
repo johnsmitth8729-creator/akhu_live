@@ -45,14 +45,6 @@
                     <span>{% translate "Live Monitoring" %}</span>
                 </a>
 
-                <!-- Quick Sidebar Filter -->
-                <div class="px-2 mb-2">
-                    <div class="input-group input-group-sm">
-                        <span class="input-group-text bg-dark border-secondary border-opacity-50 text-muted"><i class="fa-solid fa-filter" style="font-size: 0.75rem;"></i></span>
-                        <input type="text" id="sidebarSearch" class="form-control bg-dark border-secondary border-opacity-50 text-light shadow-none" style="font-size: 0.75rem;" placeholder="{% translate 'Filter tree...' %}" onkeyup="filterSidebarRegions(this.value)">
-                    </div>
-                </div>
-
                 <!-- Dynamic Regions Collapsible Tree -->
                 {% if GLOBAL_REGIONS %}
                     <div class="ps-2 my-1 border-start border-secondary border-opacity-25 ms-2 d-flex flex-column gap-1" id="sidebarRegionTree">
@@ -65,26 +57,11 @@
                                     <i class="fa-solid fa-location-dot"></i>
                                     <span>{{ r.name }}</span>
                                 </span>
-                                <span class="badge bg-secondary-subtle text-secondary py-0.5 px-1.5" style="font-size: 0.6rem;">{{ r.cameras.count|default:"0" }}</span>
+                                <span class="badge bg-secondary-subtle text-secondary py-0.5 px-1.5" style="font-size: 0.6rem;">{{ r.total_stream_count|default:r.cameras.count|default:"0" }}</span>
                             </a>
                         {% endfor %}
                     </div>
                 {% endif %}
-
-                <script>
-                function filterSidebarRegions(val) {
-                    const q = val.toLowerCase().trim();
-                    const items = document.querySelectorAll('#sidebarRegionTree .nav-link-sub-vms');
-                    items.forEach(el => {
-                        const name = el.getAttribute('data-region-name') || '';
-                        if (!q || name.includes(q)) {
-                            el.style.display = 'flex';
-                        } else {
-                            el.style.display = 'none';
-                        }
-                    });
-                }
-                </script>
                 
                 {% if user.is_authenticated %}
                     {% if user.is_super_admin %}

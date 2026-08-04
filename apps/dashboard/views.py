@@ -159,6 +159,25 @@ class HomeView(TemplateView):
             if streams:
                 region_streams[r] = streams
 
+        # Compute aggregate real-time system stats across both Cameras and LiveSources
+        total_cams = Camera.objects.filter(region__is_active=True).count()
+        total_sources = LiveSource.objects.filter(region__is_active=True).count()
+        
+        online_cams = Camera.objects.filter(region__is_active=True, status=Camera.Statuses.ONLINE).count()
+        online_sources = LiveSource.objects.filter(region__is_active=True, status__in=[LiveSource.Statuses.ONLINE, 'online']).count()
+
+        total_streams_count = total_cams + total_sources
+        online_count = online_cams + online_sources
+        offline_count = max(0, total_streams_count - online_count)
+        bandwidth_val = round(online_count * 2.2, 1)
+
+        context['stats'] = {
+            'total_cameras': total_streams_count,
+            'online_cameras': online_count,
+            'offline_cameras': offline_count,
+            'bandwidth': bandwidth_val,
+        }
+
         context['region_streams'] = region_streams
         context['regions'] = regions_list
         context['search_query'] = search_query
