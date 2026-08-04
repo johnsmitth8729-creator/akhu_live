@@ -282,7 +282,17 @@
 
             this.peerConnection.ontrack = (event) => {
                 this.videoEl.srcObject = event.streams[0];
-                this.videoEl.play().catch(() => {});
+                this.videoEl.muted = true;
+                this.videoEl.playsInline = true;
+                this.videoEl.autoplay = true;
+                this.videoEl.style.opacity = '1';
+                this.videoEl.play().then(() => {
+                    const placeholder = document.getElementById(`placeholder-${this.cameraId}`);
+                    if (placeholder) placeholder.style.display = 'none';
+                }).catch(() => {
+                    const placeholder = document.getElementById(`placeholder-${this.cameraId}`);
+                    if (placeholder) placeholder.style.display = 'none';
+                });
                 if (this.connectionTimeout) {
                     clearTimeout(this.connectionTimeout);
                     this.connectionTimeout = null;
@@ -1072,6 +1082,20 @@
 
             if (this.liveEngineContainer) this.liveEngineContainer.classList.add('engine-active');
             if (this.dvrEngineContainer) this.dvrEngineContainer.classList.remove('engine-active');
+
+            // INSTANT ZERO-DELAY STREAM TRANSFER:
+            // If the card video stream is already playing on the grid, clone its MediaStream instantly to the modal player!
+            const cardVideo = document.getElementById(`video-${streamId}`);
+            if (cardVideo && cardVideo.srcObject) {
+                console.log(`[Instant Modal] Transferring active MediaStream for ${streamId} to modal player (0ms delay)!`);
+                this.liveVideo.srcObject = cardVideo.srcObject;
+                this.liveVideo.muted = false;
+                this.liveVideo.play().catch(err => {
+                    console.warn("[Instant Modal] Unmuted play blocked by browser, playing muted:", err);
+                    this.liveVideo.muted = true;
+                    this.liveVideo.play().catch(() => {});
+                });
+            }
 
             this.liveEngine = new LiveEngine(this.liveVideo, whepUrl, hlsUrl, streamId);
             this.liveEngine.start();
