@@ -681,8 +681,14 @@
 
             this.fallbackTriggered = false;
             this.peerConnection = new RTCPeerConnection({ iceServers: iceServers });
-            this.mediaStream = new MediaStream();
-            this.videoEl.srcObject = this.mediaStream;
+            
+            // PRESERVE ACTIVE STREAM: Do NOT erase existing active MediaStream to prevent black screen flashing!
+            if (!this.videoEl.srcObject || !this.videoEl.srcObject.active) {
+                this.mediaStream = new MediaStream();
+                this.videoEl.srcObject = this.mediaStream;
+            } else {
+                this.mediaStream = this.videoEl.srcObject;
+            }
 
             this.connectionTimeout = setTimeout(() => {
                 if (this.peerConnection && this.peerConnection.connectionState !== 'connected') {
