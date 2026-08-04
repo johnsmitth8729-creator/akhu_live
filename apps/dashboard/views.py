@@ -1,4 +1,5 @@
 import logging
+import shutil
 import requests
 from django.shortcuts import render, redirect
 from django.views import View
@@ -48,7 +49,7 @@ class HomeView(TemplateView):
         if status:
             if status == 'online':
                 cameras = cameras.filter(status=Camera.Statuses.ONLINE)
-                live_sources = live_sources.filter(status__in=[LiveSource.Statuses.ONLINE, LiveSource.Statuses.RECORDING])
+                live_sources = live_sources.filter(status=LiveSource.Statuses.ONLINE)
             elif status == 'offline':
                 cameras = cameras.filter(status=Camera.Statuses.OFFLINE)
                 live_sources = live_sources.filter(status__in=[LiveSource.Statuses.OFFLINE, LiveSource.Statuses.IDLE])

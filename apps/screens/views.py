@@ -5,8 +5,11 @@ from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.utils.translation import gettext_lazy as _
 from django.conf import settings
+import logging
 from screens.models import Computer, ScreenSession, ScreenSnapshot, Heartbeat, AgentToken
 from screens.forms import ComputerForm
+
+logger = logging.getLogger(__name__)
 
 class ComputerQuerysetMixin(LoginRequiredMixin):
     """

@@ -48,4 +48,13 @@ def update_camera_status(camera):
         error_message=error_message
     )
     
+    # Keep only the latest 500 status records per camera to prevent unbounded DB growth
+    old_ids = list(
+        CameraStatus.objects.filter(camera=camera)
+        .order_by('-checked_at')
+        .values_list('id', flat=True)[500:]
+    )
+    if old_ids:
+        CameraStatus.objects.filter(id__in=old_ids).delete()
+    
     return is_online
