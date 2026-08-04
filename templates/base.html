@@ -146,9 +146,8 @@
                 </div>
                 
                 <div class="d-flex align-items-center gap-2.5">
-                    <!-- Current System Time clock & Timezone -->
                     <div class="d-none d-md-flex flex-column align-items-end px-2.5 py-1 rounded bg-dark-subtle border border-secondary border-opacity-25" style="line-height: 1.15;">
-                        <span class="fw-bold font-monospace text-dark" id="live-clock" style="font-size: 0.85rem;">--:--:--</span>
+                        <span class="fw-bold font-monospace text-dark" id="live-clock" data-server-time="{{ SERVER_TIME_MS }}" style="font-size: 0.85rem;">--:--:--</span>
                         <span class="text-muted" style="font-size: 0.625rem;">UTC+5 (Tashkent)</span>
                     </div>
 
@@ -330,11 +329,16 @@
     
     <!-- Clock & Theme Toggle Scripts -->
     <script>
-        // Live system clock running in topbar (Asia/Tashkent 24-Hour Format: 15:13:46)
+        // Live system clock synced with Production Tashkent Server (24-Hour Format: 15:24:22)
+        const clockEl = document.getElementById('live-clock');
+        const initialServerMs = clockEl ? parseInt(clockEl.getAttribute('data-server-time')) || Date.now() : Date.now();
+        const clientStartMs = Date.now();
+
         function updateClock() {
-            const clockEl = document.getElementById('live-clock');
             if (clockEl) {
-                const now = new Date();
+                const elapsed = Date.now() - clientStartMs;
+                const currentMs = initialServerMs + elapsed;
+                const d = new Date(currentMs);
                 const timeFormatter = new Intl.DateTimeFormat('en-GB', {
                     timeZone: 'Asia/Tashkent',
                     hour: '2-digit',
@@ -342,7 +346,7 @@
                     second: '2-digit',
                     hour12: false
                 });
-                clockEl.innerText = timeFormatter.format(now);
+                clockEl.innerText = timeFormatter.format(d);
             }
         }
         setInterval(updateClock, 1000);

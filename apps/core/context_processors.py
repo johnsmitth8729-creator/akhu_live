@@ -41,9 +41,18 @@ def settings_and_theme(request):
         import logging
         logging.getLogger(__name__).warning(f"Error loading global_regions list: {e}")
     
+    # Get current real Tashkent server time in milliseconds
+    from django.utils import timezone
+    import time
+    now_server = timezone.localtime(timezone.now())
+    server_time_ms = int(now_server.timestamp() * 1000)
+    server_time_offset_ms = server_time_ms - int(time.time() * 1000)
+    
     return {
         'SYSTEM_NAME': system_name,
         'THEME': theme,
         'CURRENT_LANGUAGE': lang,
         'GLOBAL_REGIONS': global_regions,
+        'SERVER_TIME_MS': server_time_ms,
+        'SERVER_TIME_OFFSET_MS': server_time_offset_ms,
     }
