@@ -22,3 +22,10 @@ mediamtx.exe
 mediamtx
 mediamtx.zip
 screen_agent.log
+
+# SSL & Security Keys
+*.key
+*.crt
+*.pem
+auto.*
+
