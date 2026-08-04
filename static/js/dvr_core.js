@@ -30,8 +30,8 @@ function formatUzbekistanTime(date, mode = 'time') {
     let inputMs = (date instanceof Date) ? date.getTime() : (typeof date === 'number' ? date : new Date(date).getTime());
     if (isNaN(inputMs)) return '--:--:--';
 
-    // If client PC clock is skewed, adjust timestamp using server offset for live mode
-    if (window.SERVER_TIME_OFFSET_MS && Math.abs(inputMs - Date.now()) < 10000) {
+    // Always apply server time offset to correct client PC clock skews (e.g. AM/PM or 12-hour offset)
+    if (window.SERVER_TIME_OFFSET_MS) {
         inputMs += window.SERVER_TIME_OFFSET_MS;
     }
     const d = new Date(inputMs);
